@@ -107,10 +107,10 @@ dotnet run --project tools/SaveVerificationTests/SaveVerificationTests.csproj -c
 
 ## Changelog
 
-### 1.0.8
-- Fixed multiplayer save loads stopping early when not every saved player was matched before restore.
-- Multiplayer loads now wait briefly for joiners, then continue with every player that does match instead of cancelling the whole load.
-- Added the source project and verification tool to the GitHub repo.
+### 1.0.9
+- Fixed saving on current PEAK builds after the run timer field became private.
+- Updated backpack capture and restore for the current game API, including backpack type.
+- Fixed the plugin's embedded version number to match the release version.
 
 Older release notes are in [CHANGELOG.md](CHANGELOG.md).
 

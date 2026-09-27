@@ -31,7 +31,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.lucasandersen.peakallyouneedsavemanager";
     public const string PluginName = "The All You Need Save Manager";
-    public const string PluginVersion = "1.0.0";
+    public const string PluginVersion = "1.0.9";
 
     private const string SaveFilePattern = "*.json";
 
@@ -65,7 +65,11 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
 
     private static readonly MethodInfo RunManagerRpcSyncTimeMethod = AccessTools.Method(typeof(RunManager), "RPC_SyncTime", new[] { typeof(float), typeof(bool) });
 
+    private static readonly FieldInfo RunManagerTimeSinceRunStartedField = AccessTools.Field(typeof(RunManager), "timeSinceRunStarted");
+
     private static readonly FieldInfo RunManagerTimerActiveField = AccessTools.Field(typeof(RunManager), "timerActive");
+
+    private static readonly FieldInfo BackpackSlotTypeField = AccessTools.Field(typeof(BackpackSlot), "backpackType");
 
     private static readonly PropertyInfo RopeShooterAmmoProperty = AccessTools.Property(typeof(RopeShooter), "Ammo");
 
@@ -1555,7 +1559,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
             RunManager runManager = RunManager.Instance ?? UnityObject.FindFirstObjectByType<RunManager>();
             if (runManager != null)
             {
-                runTimeSeconds = Mathf.Max(0f, runManager.timeSinceRunStarted);
+                runTimeSeconds = Mathf.Max(0f, runManager.TimeSinceRunStarted);
                 runTimerActive = TryGetRunTimerActive(runManager);
             }
         }
@@ -1890,7 +1894,11 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         }
 
         snapshot.tempSlot = CaptureItemSlot(player.tempFullSlot);
-        snapshot.hasBackpack = player.backpackSlot != null && player.backpackSlot.hasBackpack;
+        snapshot.hasBackpack = player.backpackSlot != null && !player.backpackSlot.IsEmpty();
+        if (snapshot.hasBackpack)
+        {
+            snapshot.backpackType = player.backpackSlot.backpackType.ToString();
+        }
 
         if (snapshot.hasBackpack && TryGetBackpackData(player, out BackpackData backpackData) && backpackData != null)
         {
@@ -3756,10 +3764,6 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
 
         player.tempFullSlot?.EmptyOut();
         ClearBackpackSlot(player);
-        if (player.backpackSlot != null)
-        {
-            player.backpackSlot.hasBackpack = false;
-        }
 
         int mainSlotCount = player.itemSlots != null ? player.itemSlots.Length : 0;
         for (int i = 0; i < snapshot.mainSlots.Count && i < mainSlotCount; i++)
@@ -3771,7 +3775,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
 
         if (snapshot.hasBackpack && player.backpackSlot != null)
         {
-            player.backpackSlot.hasBackpack = true;
+            SetBackpackType(player, snapshot.backpackType);
             ItemInstanceData backpackInstanceData = CreateItemInstanceData();
             if (!SetBackpackSlotInstanceData(player, backpackInstanceData))
             {
@@ -3983,7 +3987,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
             }
             else
             {
-                runManager.timeSinceRunStarted = runTime;
+                RunManagerTimeSinceRunStartedField?.SetValue(runManager, runTime);
                 RunManagerTimerActiveField?.SetValue(runManager, timerActive);
             }
         }
@@ -5449,17 +5453,30 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         return null;
     }
 
+    private static void SetBackpackType(GamePlayer player, string savedType)
+    {
+        if (player?.backpackSlot == null || BackpackSlotTypeField == null)
+        {
+            return;
+        }
+
+        string typeName = string.IsNullOrWhiteSpace(savedType) ? "Backpack" : savedType;
+        try
+        {
+            object backpackType = Enum.Parse(BackpackSlotTypeField.FieldType, typeName, true);
+            BackpackSlotTypeField.SetValue(player.backpackSlot, backpackType);
+        }
+        catch (Exception ex)
+        {
+            Instance?.Logger.LogWarning($"Could not restore backpack type '{typeName}': {ex.Message}");
+        }
+    }
+
     private static bool SetBackpackSlotInstanceData(GamePlayer player, ItemInstanceData instanceData)
     {
         if (player == null || player.backpackSlot == null)
         {
             return false;
-        }
-
-        if (player.backpackSlot is ItemSlot typedSlot)
-        {
-            typedSlot.data = instanceData;
-            return true;
         }
 
         object rawSlot = player.backpackSlot;
@@ -5478,7 +5495,8 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
             }
         }
 
-        FieldInfo dataField = slotType.GetField("data", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        FieldInfo dataField = slotType.GetField("data", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? slotType.BaseType?.GetField("<data>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
         if (dataField != null && typeof(ItemInstanceData).IsAssignableFrom(dataField.FieldType))
         {
             try

@@ -140,6 +140,8 @@ public sealed class InventorySnapshot
 
     public bool hasBackpack;
 
+    public string backpackType;
+
     public List<ItemSlotSnapshot> backpackSlots = new List<ItemSlotSnapshot>();
 
     public int? selectedSlotId;

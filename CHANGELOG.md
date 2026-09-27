@@ -1,3 +1,9 @@
+## 1.0.9
+
+- Fixed saving on current PEAK builds after the run timer field became private.
+- Updated backpack capture and restore for the current game API, including backpack type.
+- Fixed the plugin's embedded version number to match the release version.
+
 ## 1.0.8
 
 - Fixed multiplayer save loads stopping early when the full saved party was not matched before restore.
