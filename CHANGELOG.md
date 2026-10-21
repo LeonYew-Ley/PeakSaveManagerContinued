@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Fixed worn backpacks disappearing during inventory synchronization after loading a save.
+- Report player restore failures instead of continuing to a successful load message.
 - Restore ItemUses with the optional integer type expected by PEAK, preserving generic entries and unlimited-use state for inventory and ground items.
 
 ## 1.0.9
