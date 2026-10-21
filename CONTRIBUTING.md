@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve The All You Need Save Manager.
+Thanks for helping improve The All You Need Save Manager Continued. Report continuation bugs in this repository; original authorship is recorded in NOTICE.md.
 
 ## Fastest way to contribute
 
@@ -13,20 +13,20 @@ Thanks for helping improve The All You Need Save Manager.
 
 - `src/PeakSaveManager` contains the plugin source.
 - `tools/SaveVerificationTests` contains the lightweight save verification tool.
-- `BepInEx/plugins/TAYNSM/TAYNSM.dll` is the packaged release binary.
+- `scripts/package.ps1` creates the mod and source archives in `dist/`.
 
 ## Build
 
 Use a local PEAK install and BepInEx core path when building.
 
 ```powershell
-dotnet build src/PeakSaveManager/PeakSaveManager.csproj -c Release -p:BepInExCorePath="F:/Video Games/SteamLibrary/steamapps/common/PEAK/backup/BepInEx/core"
+./Build.ps1 -GameManagedPath '<PEAK>/PEAK_Data/Managed' -BepInExCorePath '<profile>/BepInEx/core'
 ```
 
 ## Test
 
 ```powershell
-dotnet run --project tools/SaveVerificationTests/SaveVerificationTests.csproj -c Release
+dotnet run --project tools/SaveVerificationTests/SaveVerificationTests.csproj -c Release -p:GameManagedPath="<PEAK>/PEAK_Data/Managed"
 ```
 
 After building, verify item usage restoration against the same game assemblies in
@@ -39,6 +39,8 @@ pwsh -NoProfile -File tools/Verify-ItemUsageData.ps1 -GameManagedPath "<PEAK>/PE
 This calls both managed restore paths and the game's typed data lookup. It covers
 legacy saves, incorrectly typed entries, generic-entry precedence, exhausted and
 unlimited items, and absent values. It does not replace in-game or multiplayer testing.
+
+`tools/Verify-Compatibility.ps1` accepts the same two paths and checks game API references, backpack prefab call order, both restore paths and the plugin GUID/version. `Build.ps1` runs all these checks.
 
 ## What to include in issues
 

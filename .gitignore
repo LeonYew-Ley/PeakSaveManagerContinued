@@ -11,3 +11,13 @@ obj/
 Thumbs.db
 .DS_Store
 build/
+dist/
+.tools/
+*.dll
+*.pdb
+*.log
+publication-status.json
+verification-results.json
+HANDOFF.md
+*.token
+*.secrets

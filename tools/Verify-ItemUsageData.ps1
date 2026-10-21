@@ -9,7 +9,7 @@ param(
 # exercise its real restore methods and PEAK's managed TryGetDataEntry cast without
 # creating Unity objects, launching the game, or reading any player saves.
 $ErrorActionPreference = 'Stop'
-if (!$PluginPath) { $PluginPath = Join-Path $PSScriptRoot '../build/PeakSaveManager.dll' }
+if (!$PluginPath) { $PluginPath = Join-Path $PSScriptRoot '../build/PeakSaveManagerContinued.dll' }
 $GameManagedPath = (Resolve-Path -LiteralPath $GameManagedPath).Path
 $BepInExCorePath = (Resolve-Path -LiteralPath $BepInExCorePath).Path
 $resolver = [ResolveEventHandler]{

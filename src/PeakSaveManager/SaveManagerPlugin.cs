@@ -30,8 +30,8 @@ namespace PEAKSaveManager;
 public sealed class SaveManagerPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.lucasandersen.peakallyouneedsavemanager";
-    public const string PluginName = "The All You Need Save Manager";
-    public const string PluginVersion = "1.0.9";
+    public const string PluginName = "The All You Need Save Manager Continued";
+    public const string PluginVersion = "1.1.0";
 
     private const string SaveFilePattern = "*.json";
 

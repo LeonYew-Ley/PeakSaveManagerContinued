@@ -1,8 +1,12 @@
-## Unreleased
+## 1.1.0 — Continued
 
 - Fixed worn backpacks disappearing during inventory synchronization after loading a save.
 - Report player restore failures instead of continuing to a successful load message.
 - Restore ItemUses with the optional integer type expected by PEAK, preserving generic entries and unlimited-use state for inventory and ground items.
+- Normalize wrongly typed integer use counts saved after an older restore.
+- Preserve the original plugin GUID, configuration and save format for migration.
+- Add managed restore regression checks and game assembly compatibility verification.
+- Publish the community continuation under LeonYew, with original author attribution.
 
 ## 1.0.9
 

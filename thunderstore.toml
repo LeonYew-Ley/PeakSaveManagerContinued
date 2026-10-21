@@ -1,0 +1,29 @@
+[config]
+schemaVersion = "0.0.1"
+
+[package]
+namespace = "LeonYew"
+name = "The_All_You_Need_Save_Manager_Continued"
+versionNumber = "1.1.0"
+description = "Unofficial continued PEAK save manager. Fixes worn backpacks disappearing and restored item-use crashes. Preserves existing saves and settings."
+websiteUrl = "https://github.com/LeonYew-Ley/PeakSaveManagerContinued"
+containsNsfwContent = false
+
+[package.dependencies]
+BepInEx-BepInExPack_PEAK = "5.4.2403"
+
+[build]
+icon = "./icon.png"
+readme = "./README.md"
+outdir = "./dist"
+
+[[build.copy]]
+source = "./build/PeakSaveManagerContinued.dll"
+target = "BepInEx/plugins/PeakSaveManagerContinued/PeakSaveManagerContinued.dll"
+
+[publish]
+repository = "https://thunderstore.io"
+communities = ["peak"]
+
+[publish.categories]
+peak = ["mods", "tools", "qol", "host", "ai-generated"]

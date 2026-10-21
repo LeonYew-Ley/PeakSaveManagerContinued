@@ -1,8 +1,17 @@
-# The All You Need Save Manager (TAYNSM)
+# The All You Need Save Manager Continued
 
-![TAYNSM icon](https://github.com/llucasandersen/The_All_You_Need_Save_Manager/raw/main/icon.png)
+![Continued icon](https://github.com/LeonYew-Ley/PeakSaveManagerContinued/raw/main/icon.png)
 
 All-in-one save manager for PEAK. Save a run, load it later, and restore the run setup, players, inventory, and world state as closely as the game allows.
+
+An independent community continuation of **llucasandersen's The All You Need Save Manager**, maintained by **LeonYew / LeonYew-Ley**. Original source and attribution are retained in [NOTICE.md](NOTICE.md).
+
+## Continued 1.1.0
+
+- Keeps worn backpacks and their saved contents equipped after inventory synchronization.
+- Fixes restored item-use data that caused `InvalidCastException` with current PEAK.
+- Preserves complete item data, absent/unlimited use counts, existing saves and configuration.
+- Reports player restoration failures through the load error handler.
 
 ## What It Syncs
 
@@ -79,38 +88,45 @@ If the config file does not exist yet, launch the game once with the mod install
 
 ## Installation
 
-Extract so this path exists:
+1. Disable or uninstall the original **The All You Need Save Manager** before installing this continuation.
+2. Install this package and BepInEx through your mod manager.
+3. Fully restart PEAK.
 
-`BepInEx/plugins/TAYNSM/TAYNSM.dll`
+For manual installation, extract so this path exists:
+
+`BepInEx/plugins/PeakSaveManagerContinued/PeakSaveManagerContinued.dll`
+
+The original plugin GUID and configuration filename are retained. Load an existing complete save and save to a new name when checking the update. Items already missing from a saved file cannot be reconstructed by this fix.
 
 ## Source And Contributing
 
 The GitHub repo now includes the source project and the verification tool.
 
 - Source project: `src/PeakSaveManager`
-- Verification tool: `tools/SaveVerificationTests`
-- Issues: https://github.com/llucasandersen/The_All_You_Need_Save_Manager/issues
-- Pull requests: https://github.com/llucasandersen/The_All_You_Need_Save_Manager/pulls
+- Verification tools: `tools/SaveVerificationTests`, `tools/Verify-ItemUsageData.ps1`, `tools/Verify-Compatibility.ps1`
+- Issues: https://github.com/LeonYew-Ley/PeakSaveManagerContinued/issues
+- Pull requests: https://github.com/LeonYew-Ley/PeakSaveManagerContinued/pulls
 - Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 Build command:
 
 ```powershell
-dotnet build src/PeakSaveManager/PeakSaveManager.csproj -c Release -p:BepInExCorePath="F:/Video Games/SteamLibrary/steamapps/common/PEAK/backup/BepInEx/core"
+./Build.ps1 -GameManagedPath '<PEAK>/PEAK_Data/Managed' -BepInExCorePath '<profile>/BepInEx/core'
 ```
 
-Verification command:
+This builds `build/PeakSaveManagerContinued.dll` and runs the managed verification checks. Requires PowerShell 7, a .NET SDK with .NET 9 runtime support, and local PEAK/BepInEx assemblies. Third-party assemblies are not included.
+
+Package the mod and a separate source archive:
 
 ```powershell
-dotnet run --project tools/SaveVerificationTests/SaveVerificationTests.csproj -c Release
+./scripts/package.ps1
 ```
 
 ## Changelog
 
-### 1.0.9
-- Fixed saving on current PEAK builds after the run timer field became private.
-- Updated backpack capture and restore for the current game API, including backpack type.
-- Fixed the plugin's embedded version number to match the release version.
+### 1.1.0
+- Community continuation with backpack and item data restoration repairs.
+- Added 36 managed item-restore regression cases and game assembly compatibility checks.
 
 Older release notes are in [CHANGELOG.md](CHANGELOG.md).
 
@@ -119,7 +135,12 @@ Older release notes are in [CHANGELOG.md](CHANGELOG.md).
 - Shelf fungus can fail to restore in some saves.
 - Bounce fungus can fail to restore in some saves.
 
+## Validation
+
+Release compilation, 36 managed item-restore cases and the existing save serialization checks pass against installed PEAK 2.6 assemblies. Compatibility verification resolves 121 game member references and 65 game type references and checks backpack restoration call order. In-game singleplayer and host/client testing remains pending; the automated checks do not launch Unity or Photon.
+
 ## Links
 
-- GitHub: https://github.com/llucasandersen/The_All_You_Need_Save_Manager
-- Thunderstore: https://thunderstore.io/c/peak/p/llucasandersen/The_All_You_Need_Save_Manager/
+- GitHub: https://github.com/LeonYew-Ley/PeakSaveManagerContinued
+- Thunderstore: https://thunderstore.io/c/peak/p/LeonYew/The_All_You_Need_Save_Manager_Continued/
+- Original project: https://github.com/llucasandersen/The_All_You_Need_Save_Manager

@@ -2,17 +2,26 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AssemblyName>PeakSaveManagerContinued</AssemblyName>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+    <Product>The All You Need Save Manager Continued</Product>
     <Nullable>disable</Nullable>
     <OutputPath>..\..\build\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
   <PropertyGroup>
-    <BepInExCorePath Condition="'$(BepInExCorePath)' == ''">..\..\..\..\core</BepInExCorePath>
+    <BepInExCorePath Condition="'$(BepInExCorePath)' == ''">$(BEPINEX_CORE_PATH)</BepInExCorePath>
     <GameManagedPath Condition="'$(GameManagedPath)' == ''">$(PEAKManagedPath)</GameManagedPath>
-    <GameManagedPath Condition="'$(GameManagedPath)' == ''">F:\Video Games\SteamLibrary\steamapps\common\PEAK\PEAK_Data\Managed</GameManagedPath>
   </PropertyGroup>
+
+  <Target Name="ValidateLocalReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(GameManagedPath)\Assembly-CSharp.dll')" Text="Set GameManagedPath to your PEAK_Data/Managed directory." />
+    <Error Condition="!Exists('$(BepInExCorePath)\BepInEx.dll')" Text="Set BepInExCorePath to your BepInEx/core directory." />
+  </Target>
 
   <ItemDefinitionGroup>
     <Reference>
