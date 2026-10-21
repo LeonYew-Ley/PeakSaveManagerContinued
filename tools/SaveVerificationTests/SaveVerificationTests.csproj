@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\PeakSaveManager\SaveModels.cs" Link="SaveModels.cs" />
+    <Compile Include="..\..\src\PeakSaveManager\PlayerLoadRestoration.cs" Link="PlayerLoadRestoration.cs" />
+    <Compile Include="..\..\src\PeakSaveManager\PlayerRestoration.cs" Link="PlayerRestoration.cs" />
   </ItemGroup>
 
   <ItemGroup>

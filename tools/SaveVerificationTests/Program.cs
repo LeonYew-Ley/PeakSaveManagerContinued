@@ -29,6 +29,9 @@ internal static class Program
             VerifyCheckpointRoundTrip(loaded.worldObjects);
             VerifyItemDataRoundTrip(loaded.players);
             VerifyVelocityRoundTrip(loaded.players, loaded.groundItems);
+            PlayerLoadRestorationTests.Run();
+            PlayerRestorationTests.Run();
+            MergedPlayerLoadTests.Run();
 
             Console.WriteLine("Save/load verification passed for deployable categories: piton, rope, chain, scout, bean, fungus, checkpoint, stove.");
             return 0;

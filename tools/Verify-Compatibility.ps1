@@ -37,6 +37,25 @@ try {
         throw 'The game rope-shooter ammo contract changed; review before release.'
     }
     $pluginType = $plugin.MainModule.GetType('PEAKSaveManager.SaveManagerPlugin')
+    # These private native members are used only to clean up our own failed warp.
+    # String-based reflection does not appear in the normal member-reference scan.
+    $character = $game.MainModule.GetType('Character')
+    foreach ($contract in @(
+        @{ Name = '_warpRoutine'; Type = 'UnityEngine.Coroutine' },
+        @{ Name = '_warpStatusLock'; Type = 'System.Boolean' }
+    )) {
+        $field = @($character.Fields | Where-Object Name -eq $contract.Name)
+        if ($field.Count -ne 1 -or $field[0].FieldType.FullName -ne $contract.Type) {
+            throw "Player warp cleanup contract changed: $($contract.Name)"
+        }
+    }
+    $warping = @($character.Properties | Where-Object Name -eq 'warping')
+    if ($warping.Count -ne 1 -or !$warping[0].SetMethod -or $warping[0].PropertyType.FullName -ne 'System.Boolean') {
+        throw 'Player warp cleanup setter changed.'
+    }
+    if (!($character.Methods | Where-Object { $_.Name -eq 'RecalculateLookDirections' -and $_.Parameters.Count -eq 0 })) {
+        throw 'Player view restoration contract changed.'
+    }
     $inventory = $pluginType.Methods | Where-Object Name -eq 'ApplyInventory'
     $instructions = $inventory.Body.Instructions
     $resolvePrefab = @($instructions | Where-Object { $_.Operand -and $_.Operand.ToString() -eq 'System.Boolean ItemDatabase::TryGetItem(System.String,Item&)' })

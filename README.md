@@ -6,12 +6,14 @@ All-in-one save manager for PEAK. Save a run, load it later, and restore the run
 
 An independent community continuation of **llucasandersen's The All You Need Save Manager**, maintained by **LeonYew / LeonYew-Ley**. Original source and attribution are retained in [NOTICE.md](NOTICE.md).
 
-## Continued 1.1.0
+## Continued 1.2.0
 
-- Keeps worn backpacks and their saved contents equipped after inventory synchronization.
-- Fixes restored item-use data that caused `InvalidCastException` with current PEAK.
-- Preserves complete item data, absent/unlimited use counts, existing saves and configuration.
-- Reports player restoration failures through the load error handler.
+- Restores saved living scouts through native revival, including teammates who are currently dead. Scouts saved as dead remain dead.
+- Waits for each player's client to finish teleporting and attach the saved held item, then reports completion.
+- Clears player motion on load and restores saved life state, stamina and collision after teleporting.
+- Keeps the backpack and item-use fixes from 1.1.0, with existing saves and configuration compatible.
+
+**The host and every restored teammate must install 1.2.0 and restart PEAK.** Automated checks pass; in-game host/client testing remains pending.
 
 ## What It Syncs
 
@@ -23,7 +25,8 @@ An independent community continuation of **llucasandersen's The All You Need Sav
 
 ### Player state
 - Position and rotation
-- Velocity and angular velocity
+- Saved death, unconsciousness and petrification state
+- Player motion is cleared on load; saved velocity fields remain compatible with old saves
 - Stamina and extra stamina
 - Status effects
 - Checkpoint ownership links
@@ -78,6 +81,11 @@ If the config file does not exist yet, launch the game once with the mod install
 - You can load while already in a run.
 - In multiplayer, the host controls save and load.
 - Multiplayer loads now restore every saved player that matches, even if the full saved party is not present yet.
+- The host and every restored teammate must install the same build. Loading stops before restoring players if a client does not support this build's restoration protocol.
+- Teleport completion and native held-item attachment are checked on the character's owner before reporting success. Timeouts and disconnects report a load failure.
+- Players resume at rest at the saved position and view. Airborne or climbing saves still need physical support to stand; loading does not move players to a guessed ground position.
+- Living saved scouts use the game's network revival without extra revival penalties before inventory is restored.
+- Player names must be unique and match the save. Missing, renamed, ambiguous or uninitialized players are skipped and reported as a partial load.
 
 ## Save Files
 
@@ -103,7 +111,7 @@ The original plugin GUID and configuration filename are retained. Load an existi
 The GitHub repo now includes the source project and the verification tool.
 
 - Source project: `src/PeakSaveManager`
-- Verification tools: `tools/SaveVerificationTests`, `tools/Verify-ItemUsageData.ps1`, `tools/Verify-Compatibility.ps1`
+- Verification tools: `tools/SaveVerificationTests`, `tools/Verify-ItemUsageData.ps1`, `tools/Verify-Compatibility.ps1`, `tools/Verify-PlayerRestoration.ps1`
 - Issues: https://github.com/LeonYew-Ley/PeakSaveManagerContinued/issues
 - Pull requests: https://github.com/LeonYew-Ley/PeakSaveManagerContinued/pulls
 - Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -124,6 +132,11 @@ Package the mod and a separate source archive:
 
 ## Changelog
 
+### 1.2.0
+- Combined player revival, teleport completion and held-item restoration fixes.
+- Requires the same version on the host and restored teammates.
+- Reports ambiguous player matches, partial loads, timeouts and disconnects.
+
 ### 1.1.0
 - Community continuation with backpack and item data restoration repairs.
 - Added 36 managed item-restore regression cases and game assembly compatibility checks.
@@ -137,7 +150,7 @@ Older release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Validation
 
-Release compilation, 36 managed item-restore cases and the existing save serialization checks pass against installed PEAK 2.6 assemblies. Compatibility verification resolves 121 game member references and 65 game type references and checks backpack restoration call order. In-game singleplayer and host/client testing remains pending; the automated checks do not launch Unity or Photon.
+Release compilation, 36 item-restore cases, 27 player-load workflow cases, 512 life-state combinations, 32 combined life/warp scenarios and save serialization checks pass against installed PEAK 2.6 assemblies. Life-state and combined scenarios each run twice; additional checks cover status replay and all 101 petrify percentages. Compatibility verification checks game references, private warp cleanup APIs, native life RPCs and backpack restoration call order. In-game singleplayer and host/client testing remains pending; the automated checks do not launch Unity or Photon.
 
 ## Links
 

@@ -4,8 +4,8 @@ schemaVersion = "0.0.1"
 [package]
 namespace = "LeonYew"
 name = "The_All_You_Need_Save_Manager_Continued"
-versionNumber = "1.1.0"
-description = "Unofficial continued PEAK save manager. Fixes worn backpacks disappearing and restored item-use crashes. Preserves existing saves and settings."
+versionNumber = "1.2.0"
+description = "Continued PEAK save manager with player revival, owner-confirmed teleport and held-item restoration. Host and teammates need the same version. Preserves existing saves and settings."
 websiteUrl = "https://github.com/LeonYew-Ley/PeakSaveManagerContinued"
 containsNsfwContent = false
 
@@ -26,4 +26,4 @@ repository = "https://thunderstore.io"
 communities = ["peak"]
 
 [publish.categories]
-peak = ["mods", "tools", "qol", "host", "ai-generated"]
+peak = ["mods", "tools", "qol", "ai-generated"]

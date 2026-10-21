@@ -1,3 +1,14 @@
+## 1.2.0 — Player load restoration
+
+- Restore held items once through the character owner's native equip flow, including empty hands and legacy slot fallbacks, without assigning item templates to runtime state.
+- Wait for owner-confirmed teleport completion and item attachment; report timeouts, missing owner support and disconnects as failures.
+- Resume at rest with full-body motion cleared, keeping saved positions, view, inventory and existing save format.
+- Restore saved living scouts through native network revival before inventory, without extra revival penalties; preserve saved dead/unconscious states.
+- Match unique saved player names, wait for initialized characters and report skipped players as partial loads.
+- Finalize saved life state, stamina and collision on the player's owner after teleport completion; keep dead saved scouts from regaining body collision during the native warp.
+- Require the host and every restored teammate to install the same version; the host still controls loading.
+- Add managed selection, ordering and failure regressions. Unity/Photon gameplay validation remains pending.
+
 ## 1.1.0 — Continued
 
 - Fixed worn backpacks disappearing during inventory synchronization after loading a save.

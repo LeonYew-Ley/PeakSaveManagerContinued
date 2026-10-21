@@ -18,6 +18,8 @@ Run 'pwsh' @('-NoProfile', '-File', (Join-Path $projectRoot 'tools/Verify-ItemUs
     '-GameManagedPath', $GameManagedPath, '-BepInExCorePath', $BepInExCorePath)
 Run 'pwsh' @('-NoProfile', '-File', (Join-Path $projectRoot 'tools/Verify-Compatibility.ps1'),
     '-GameManagedPath', $GameManagedPath, '-BepInExCorePath', $BepInExCorePath)
+Run 'pwsh' @('-NoProfile', '-File', (Join-Path $projectRoot 'tools/Verify-PlayerRestoration.ps1'),
+    '-GameManagedPath', $GameManagedPath, '-BepInExCorePath', $BepInExCorePath)
 Run 'dotnet' @('run', '--project', (Join-Path $projectRoot 'tools/SaveVerificationTests/SaveVerificationTests.csproj'),
     '-c', 'Release', "-p:GameManagedPath=$GameManagedPath")
 Write-Output 'Build and managed verification passed. Unity/Photon gameplay was not tested.'

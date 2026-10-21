@@ -27,11 +27,11 @@ using UnityObject = UnityEngine.Object;
 namespace PEAKSaveManager;
 
 [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
-public sealed class SaveManagerPlugin : BaseUnityPlugin
+public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.lucasandersen.peakallyouneedsavemanager";
     public const string PluginName = "The All You Need Save Manager Continued";
-    public const string PluginVersion = "1.1.0";
+    public const string PluginVersion = "1.2.0";
 
     private const string SaveFilePattern = "*.json";
 
@@ -102,10 +102,6 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
     private static readonly FieldInfo CheckpointFlagPlanterField = AccessTools.Field(typeof(CheckpointFlag), "planterCharacter");
 
     private static readonly FieldInfo CharacterItemsCurrentSelectedSlotField = AccessTools.Field(typeof(CharacterItems), "currentSelectedSlot");
-
-    private static readonly MethodInfo CharacterItemsEquipSlotMethod = AccessTools.Method(typeof(CharacterItems), "EquipSlot", new[] { typeof(Optionable<byte>) });
-
-    private static readonly ConstructorInfo OptionableByteConstructor = AccessTools.Constructor(typeof(Optionable<byte>), new[] { typeof(byte), typeof(byte) });
 
     private static readonly FieldInfo OptionableByteHasValueField = AccessTools.Field(typeof(Optionable<byte>), "hasValue");
 
@@ -244,6 +240,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
 
         harmony = new Harmony(PluginGuid);
         harmony.PatchAll();
+        PhotonNetwork.AddCallbackTarget(this);
 
         RefreshSaveFileList();
         SetStatus("Save manager ready.", Color.cyan, 2f);
@@ -252,6 +249,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
+        PhotonNetwork.RemoveCallbackTarget(this);
         try
         {
             harmony?.UnpatchSelf();
@@ -3044,26 +3042,29 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         try
         {
             IEnumerator inner = LoadSaveRoutineCore(fullPath);
-            while (true)
+            using (inner as IDisposable)
             {
-                object current;
-                try
+                while (true)
                 {
-                    if (!inner.MoveNext())
+                    object current;
+                    try
                     {
-                        break;
+                        if (!inner.MoveNext())
+                        {
+                            break;
+                        }
+
+                        current = inner.Current;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"Load failed for '{fullPath}': {ex}");
+                        SetStatus(BuildLoadFailureStatus(ex), Color.red, 6f);
+                        yield break;
                     }
 
-                    current = inner.Current;
+                    yield return current;
                 }
-                catch (Exception ex)
-                {
-                    Logger.LogError($"Load failed for '{fullPath}': {ex}");
-                    SetStatus(BuildLoadFailureStatus(ex), Color.red, 6f);
-                    yield break;
-                }
-
-                yield return current;
             }
         }
         finally
@@ -3141,7 +3142,13 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
             int matchedPlayers = CountMatchedPlayers(envelope.players);
             if (matchedPlayers <= 0)
             {
-                SetStatus("No matching players were found for this save.", Color.yellow, 6f);
+                foreach (PlayerSnapshot snapshot in envelope.players)
+                {
+                    GamePlayer player = FindPlayer(snapshot, envelope.players, out string matchReason);
+                    LogSkippedPlayer(snapshot, matchReason ?? GetPlayerRestoreReadinessIssue(player));
+                }
+
+                SetStatus("No ready, uniquely matched players were found. See log for details.", Color.yellow, 7f);
                 yield break;
             }
 
@@ -3162,15 +3169,35 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
             }
         }
 
+        // Check owner support before changing inventories or world objects. Only
+        // the owner can confirm its warp and restore its camera and native item.
+        foreach (PlayerSnapshot playerSnapshot in envelope.players)
+        {
+            GamePlayer target = FindPlayer(playerSnapshot, envelope.players, out _);
+            if (!IsPlayerReadyForRestore(target)) continue;
+            IEnumerator probe = RestoreOnPlayerOwnerRoutine(target.character, null);
+            using (probe as IDisposable)
+            {
+                while (probe.MoveNext()) yield return probe.Current;
+            }
+        }
+
         yield return StartCoroutine(RestoreWorldInteractablesRoutine(envelope));
 
         int appliedCount = 0;
+        HashSet<GamePlayer> restoredPlayers = new HashSet<GamePlayer>();
         foreach (PlayerSnapshot playerSnapshot in envelope.players)
         {
-            GamePlayer target = FindPlayer(playerSnapshot);
-            if (target == null)
+            GamePlayer target = FindPlayer(playerSnapshot, envelope.players, out string matchReason);
+            if (target == null || !IsPlayerReadyForRestore(target))
             {
-                Logger.LogWarning($"Could not find player for snapshot '{playerSnapshot.playerName}' (Actor: {playerSnapshot.actorNumber})");
+                LogSkippedPlayer(playerSnapshot, matchReason ?? GetPlayerRestoreReadinessIssue(target));
+                continue;
+            }
+
+            if (!restoredPlayers.Add(target))
+            {
+                Logger.LogWarning($"Skipped duplicate snapshot for '{playerSnapshot.playerName}': this player was already restored.");
                 continue;
             }
 
@@ -3178,9 +3205,12 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
             // Unity otherwise logs a nested coroutine exception and continues this load
             // as if that player's inventory had been restored successfully.
             IEnumerator restorePlayer = ApplyPlayerSnapshotRoutine(target, playerSnapshot);
-            while (restorePlayer.MoveNext())
+            using (restorePlayer as IDisposable)
             {
-                yield return restorePlayer.Current;
+                while (restorePlayer.MoveNext())
+                {
+                    yield return restorePlayer.Current;
+                }
             }
             appliedCount++;
         }
@@ -3192,13 +3222,14 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         }
 
         RestoreRunMetadata(envelope.metadata);
-        Logger.LogInfo($"Load succeeded for '{fullPath}' ({appliedCount}/{envelope.players.Count} players).");
         if (appliedCount < envelope.players.Count)
         {
-            SetStatus($"Loaded save for {appliedCount}/{envelope.players.Count} saved players.", Color.yellow, 5f);
+            Logger.LogWarning($"Load partially restored '{fullPath}' ({appliedCount}/{envelope.players.Count} players); see skipped-player reasons above.");
+            SetStatus($"Partial load: restored {appliedCount}/{envelope.players.Count} saved players. See log for skipped players.", Color.yellow, 7f);
         }
         else
         {
+            Logger.LogInfo($"Load succeeded for '{fullPath}' ({appliedCount}/{envelope.players.Count} players).");
             SetStatus($"Loaded save successfully ({appliedCount}/{envelope.players.Count} players).", Color.green, 4f);
         }
     }
@@ -3278,40 +3309,64 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
             return 0;
         }
 
-        GamePlayer[] found = UnityObject.FindObjectsByType<GamePlayer>(FindObjectsSortMode.None);
-        if (found.Length == 0)
-        {
-            return 0;
-        }
-
-        int matched = 0;
+        HashSet<GamePlayer> matched = new HashSet<GamePlayer>();
         for (int i = 0; i < players.Count; i++)
         {
-            PlayerSnapshot snapshot = players[i];
-            bool hasMatch = found.Any(player =>
+            GamePlayer player = FindPlayer(players[i], players, out _);
+            if (IsPlayerReadyForRestore(player))
             {
-                PhotonView pv = GetPhotonView((Component)player);
-                if (pv == null)
-                {
-                    return false;
-                }
-
-                RealtimePlayer owner = pv.Owner;
-                if (snapshot.actorNumber > 0 && owner != null && owner.ActorNumber == snapshot.actorNumber)
-                {
-                    return true;
-                }
-
-                return owner != null && string.Equals(owner.NickName, snapshot.playerName, StringComparison.OrdinalIgnoreCase);
-            });
-
-            if (hasMatch)
-            {
-                matched++;
+                matched.Add(player);
             }
         }
 
-        return matched;
+        return matched.Count;
+    }
+
+    private void LogSkippedPlayer(PlayerSnapshot snapshot, string reason)
+    {
+        Logger.LogWarning($"Skipped saved player '{snapshot?.playerName}' (saved actor: {snapshot?.actorNumber}): {reason}.");
+    }
+
+    private static bool IsPlayerReadyForRestore(GamePlayer player) => GetPlayerRestoreReadinessIssue(player) == null;
+
+    private static string GetPlayerRestoreReadinessIssue(GamePlayer player)
+    {
+        if (player == null)
+        {
+            return "player is not available";
+        }
+
+        Character character = player.character;
+        if (character == null)
+        {
+            return "matched player is connected but their character has not spawned";
+        }
+
+        if (!character.IsRegisteredToPlayer || !character.IsInitialized)
+        {
+            return "matched character is not registered/initialized yet";
+        }
+
+        if (character.warping)
+        {
+            return "matched character still has a native warp in progress";
+        }
+
+        if (character.data == null || character.refs == null || character.refs.ragdoll == null
+            || character.refs.afflictions == null || character.refs.items == null)
+        {
+            return "matched character is missing required life/inventory components";
+        }
+
+        PhotonView playerView = GetPhotonView((Component)player);
+        PhotonView characterView = GetPhotonView((Component)character);
+        if (playerView == null || characterView == null || playerView.Owner == null || characterView.Owner == null
+            || playerView.Owner.ActorNumber != characterView.Owner.ActorNumber)
+        {
+            return "matched player and character network owners do not agree";
+        }
+
+        return null;
     }
 
     private int CountSavedPlayers(List<PlayerSnapshot> players)
@@ -3364,9 +3419,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         }
 
         const float pollIntervalSeconds = 0.1f;
-        const float settleWindowSeconds = 3f;
         float timeout = Mathf.Max(1f, timeoutSeconds);
-        float settledForSeconds = 0f;
         int bestMatched = 0;
 
         while (timeout > 0f)
@@ -3375,12 +3428,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
             if (matched > bestMatched)
             {
                 bestMatched = matched;
-                settledForSeconds = 0f;
-                Logger.LogInfo($"Player match progress: {matched}/{desiredMatches}.");
-            }
-            else
-            {
-                settledForSeconds += pollIntervalSeconds;
+                Logger.LogInfo($"Ready player match progress: {matched}/{desiredMatches}.");
             }
 
             if (matched >= desiredMatches)
@@ -3388,54 +3436,51 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
                 yield break;
             }
 
-            if (matched > 0 && settledForSeconds >= settleWindowSeconds)
-            {
-                Logger.LogInfo($"Proceeding with partial player match after waiting {settledForSeconds:0.0}s ({matched}/{desiredMatches}).");
-                yield break;
-            }
-
             timeout -= pollIntervalSeconds;
-            yield return new WaitForSeconds(pollIntervalSeconds);
+            yield return new WaitForSecondsRealtime(pollIntervalSeconds);
         }
+
+        Logger.LogWarning($"Timed out waiting for initialized, uniquely matched player characters ({CountMatchedPlayers(players)}/{desiredMatches} ready).");
     }
 
     private IEnumerator ApplyPlayerSnapshotRoutine(GamePlayer player, PlayerSnapshot snapshot)
     {
+        if (!IsPlayerReadyForRestore(player))
+        {
+            throw new InvalidOperationException($"Cannot restore '{snapshot?.playerName}': player character is not ready.");
+        }
+
         Character character = player.character;
-        if (character == null)
+        PhotonView lifeView = GetPhotonView((Component)character);
+        if (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient)
         {
-            yield break;
+            throw new InvalidOperationException("Only the host can restore player life state.");
         }
 
-        ApplyInventory(player, character, snapshot.inventory);
-        ApplyCharacterSnapshot(character, snapshot.character);
+        PlayerRestoration.ApplyBeforeWarp(snapshot.character,
+            (rpc, arguments) =>
+            {
+                lifeView.RPC(rpc, RpcTarget.All, arguments);
+                // Photon can log a local RPC exception instead of throwing it
+                // back to this coroutine. Do not hide that behind later field
+                // assignments and report the player as restored.
+                bool deadSave = snapshot.character.dead;
+                if (character.data.dead != deadSave || character.data.passedOut != deadSave
+                    || character.data.fullyPassedOut != deadSave
+                    || (!deadSave && (character.data.deathTimer != 0f || character.data.fallSeconds != 0f)))
+                {
+                    throw new InvalidOperationException($"Native life transition failed for '{snapshot.playerName}' on the host. Inventory was not restored.");
+                }
+            },
+            () => RestoreSavedLifeFlags(character, snapshot.character),
+            () => ApplyInventory(player, character, snapshot.inventory),
+            () => ApplyCharacterSnapshot(character, snapshot.character));
 
-        Vector3 targetPosition = snapshot.position.ToUnity();
-        PhotonView characterView = GetPhotonView((Component)character);
-        RealtimePlayer owner = characterView != null ? characterView.Owner : null;
-        if (characterView != null && owner != null)
+        IEnumerator restore = RestoreOnPlayerOwnerRoutine(character, snapshot);
+        using (restore as IDisposable)
         {
-            characterView.RPC("WarpPlayerRPC", owner, targetPosition, false);
+            while (restore.MoveNext()) yield return restore.Current;
         }
-        else
-        {
-            ((Component)character).transform.position = targetPosition;
-        }
-
-        if (characterView != null && characterView.IsMine)
-        {
-            ((Component)character).transform.eulerAngles = snapshot.rotation.ToUnity();
-            character.data.lookValues = snapshot.character.lookValues.ToUnity();
-            RecalculateLookDirectionsMethod?.Invoke(character, null);
-        }
-        else if (characterView == null)
-        {
-            ((Component)character).transform.eulerAngles = snapshot.rotation.ToUnity();
-        }
-
-        ApplyCharacterVelocity(character, snapshot.velocity, snapshot.angularVelocity);
-        ApplyEquippedSelection(player, character, snapshot.inventory);
-        yield return new WaitForSeconds(0.05f);
     }
 
     private void ApplyCharacterSnapshot(Character character, CharacterSnapshot snapshot)
@@ -3460,6 +3505,23 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         ApplyCharacterCheckpointFlags(character, snapshot.checkpointFlagPaths);
     }
 
+    private static void RestoreSavedLifeFlags(Character character, CharacterSnapshot snapshot)
+    {
+        // ReviveCharacter supplies the complete living-state transition. Preserve
+        // saved unconscious/dead flags using the game's existing state-sync RPC,
+        // without PassOut/Die RPCs that drop items or start another warp.
+        CharacterData data = character.data;
+        PhotonView view = GetPhotonView((Component)character);
+        view.RPC("RPC_SyncOnJoin", RpcTarget.All,
+            snapshot.passedOut, snapshot.fullyPassedOut, snapshot.dead,
+            data.isSprinting, data.currentItem != null ? GetPhotonView((Component)data.currentItem) : null,
+            data.isJumping, data.isClimbing, data.isRopeClimbing, data.isVineClimbing,
+            data.vinePercent, data.ropePercent, data.isCrouching, data.isReaching,
+            data.heldVine != null ? GetPhotonView((Component)data.heldVine) : null,
+            data.heldRope != null ? GetPhotonView((Component)data.heldRope) : null,
+            data.badgeStatus, data.cannibalismPermitted, data.isSkeleton, PlayerRestoration.GetSavedPetrify(snapshot.statuses));
+    }
+
     private static void ApplyCharacterStatuses(Character character, List<CharacterStatusSnapshot> statusSnapshots)
     {
         if (character == null || character.refs == null || character.refs.afflictions == null)
@@ -3468,6 +3530,13 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         }
 
         CharacterAfflictions afflictions = character.refs.afflictions;
+        PhotonView view = GetPhotonView((Component)character);
+        if (view != null && !view.IsMine)
+        {
+            RestoreRemoteCharacterStatuses(character, statusSnapshots);
+            return;
+        }
+
         afflictions.ClearAllStatus(excludeCurse: false);
 
         if (statusSnapshots == null || statusSnapshots.Count == 0)
@@ -3489,7 +3558,7 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
                 continue;
             }
 
-            if (SkippedSavedStatuses.Contains(statusType))
+            if (SkippedSavedStatuses.Contains(statusType) || statusType == CharacterAfflictions.STATUSTYPE.Petrify)
             {
                 continue;
             }
@@ -3499,6 +3568,62 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         }
 
         afflictions.PushStatuses(null);
+    }
+
+    private static void RestoreRemoteCharacterStatuses(Character character, List<CharacterStatusSnapshot> statuses)
+    {
+        // SetStatus and PushStatuses only work on the owning client. Use the
+        // game's master-only RPC; its array contains DELTAS, not absolute values.
+        // Clear to zero first so repeated loads cannot accumulate hunger/curse.
+        int statusCount = CharacterAfflictions.NumStatusTypes;
+        float[] caps = new float[statusCount];
+        bool[] damageScaled = new bool[statusCount];
+        float[] saved = new float[statusCount];
+        for (int i = 0; i < statusCount; i++)
+        {
+            CharacterAfflictions.STATUSTYPE type = (CharacterAfflictions.STATUSTYPE)i;
+            if (IsRestorableRemoteStatus(type))
+            {
+                caps[i] = character.refs.afflictions.GetStatusCap(type);
+            }
+
+            damageScaled[i] = type == CharacterAfflictions.STATUSTYPE.Injury || type == CharacterAfflictions.STATUSTYPE.Curse
+                || type == CharacterAfflictions.STATUSTYPE.Poison || type == CharacterAfflictions.STATUSTYPE.Spores
+                || type == CharacterAfflictions.STATUSTYPE.Cold || type == CharacterAfflictions.STATUSTYPE.Hot
+                || type == CharacterAfflictions.STATUSTYPE.Drowsy;
+        }
+
+        if (statuses != null)
+        {
+            foreach (CharacterStatusSnapshot status in statuses)
+            {
+                if (status == null || !Enum.TryParse(status.statusType, true, out CharacterAfflictions.STATUSTYPE type)
+                    || !Enum.IsDefined(typeof(CharacterAfflictions.STATUSTYPE), type) || !IsRestorableRemoteStatus(type))
+                {
+                    continue;
+                }
+
+                saved[(int)type] = Mathf.Max(0f, status.amount);
+            }
+        }
+
+        // AddStatus applies ascent damage scaling; saved amounts have already
+        // been scaled, so cancel that multiplier on replay.
+        PlayerRestoration.BuildStatusReplay(caps, damageScaled, saved, Ascents.etcDamageMultiplier,
+            out float[] clear, out float[] replay);
+        PhotonView view = GetPhotonView((Component)character);
+        // All receives the same ordered reset/replay, including the owner. This
+        // also works when the saved scout is dead and will not push statuses.
+        view.RPC("RPC_ApplyStatusesFromFloatArray", RpcTarget.All, (object)clear);
+        view.RPC("RPC_ApplyStatusesFromFloatArray", RpcTarget.All, (object)replay);
+    }
+
+    private static bool IsRestorableRemoteStatus(CharacterAfflictions.STATUSTYPE type)
+    {
+        // The native delta RPC excludes the three derived physical statuses.
+        // Petrify is restored absolutely by RPC_SyncOnJoin before inventory.
+        return type != CharacterAfflictions.STATUSTYPE.Weight && type != CharacterAfflictions.STATUSTYPE.Thorns
+            && type != CharacterAfflictions.STATUSTYPE.Arrow && type != CharacterAfflictions.STATUSTYPE.Petrify;
     }
 
     private static void ApplyCharacterCheckpointFlags(Character character, List<string> checkpointFlagPaths)
@@ -3556,131 +3681,6 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         catch
         {
             // Ignore checkpoint ownership list restore failures.
-        }
-    }
-
-    private static void ApplyCharacterVelocity(Character character, Vector3Snapshot velocitySnapshot, Vector3Snapshot angularVelocitySnapshot)
-    {
-        if (character == null || character.data == null)
-        {
-            return;
-        }
-
-        Vector3 velocity = velocitySnapshot != null ? velocitySnapshot.ToUnity() : Vector3.zero;
-        Vector3 angularVelocity = angularVelocitySnapshot != null ? angularVelocitySnapshot.ToUnity() : Vector3.zero;
-
-        character.data.avarageVelocity = velocity;
-        character.data.avarageLastFrameVelocity = velocity;
-
-        Rigidbody hipRig = character.refs != null && character.refs.hip != null ? character.refs.hip.Rig : null;
-        if (hipRig == null)
-        {
-            return;
-        }
-
-        try
-        {
-            hipRig.linearVelocity = velocity;
-            hipRig.angularVelocity = angularVelocity;
-        }
-        catch
-        {
-            // Ignore rigidbody velocity restore failures on game updates.
-        }
-    }
-
-    private static void ApplyEquippedSelection(GamePlayer player, Character character, InventorySnapshot snapshot)
-    {
-        if (player == null || character == null || snapshot == null)
-        {
-            return;
-        }
-
-        CharacterItems items = character.refs != null ? character.refs.items : null;
-        if (items == null)
-        {
-            return;
-        }
-
-        int? selectedSlot = null;
-        if (snapshot.selectedSlotId.HasValue && IsValidMainSlot(player, snapshot.selectedSlotId.Value))
-        {
-            selectedSlot = snapshot.selectedSlotId.Value;
-        }
-        else if (snapshot.equippedMainSlotIndex.HasValue && IsValidMainSlot(player, snapshot.equippedMainSlotIndex.Value))
-        {
-            selectedSlot = snapshot.equippedMainSlotIndex.Value;
-        }
-        else if (snapshot.heldItemId != ushort.MaxValue && player.itemSlots != null)
-        {
-            for (int i = 0; i < player.itemSlots.Length; i++)
-            {
-                ItemSlot slot = player.itemSlots[i];
-                if (slot != null && slot.prefab != null && slot.prefab.itemID == snapshot.heldItemId)
-                {
-                    selectedSlot = i;
-                    break;
-                }
-            }
-        }
-
-        if (selectedSlot.HasValue)
-        {
-            TryEquipSlot(items, (byte)selectedSlot.Value);
-        }
-
-        if (snapshot.heldItemId != ushort.MaxValue && ItemDatabase.TryGetItem(snapshot.heldItemId, out Item heldItem) && heldItem != null)
-        {
-            character.data.currentItem = heldItem;
-        }
-    }
-
-    private static bool IsValidMainSlot(GamePlayer player, int slotIndex)
-    {
-        return player != null
-            && player.itemSlots != null
-            && slotIndex >= 0
-            && slotIndex < player.itemSlots.Length;
-    }
-
-    private static bool TryEquipSlot(CharacterItems items, byte slotId)
-    {
-        if (items == null || CharacterItemsEquipSlotMethod == null)
-        {
-            return false;
-        }
-
-        object optionableSlot = CreateOptionableByte(slotId, hasValue: true);
-        if (optionableSlot == null)
-        {
-            return false;
-        }
-
-        try
-        {
-            CharacterItemsEquipSlotMethod.Invoke(items, new[] { optionableSlot });
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static object CreateOptionableByte(byte value, bool hasValue)
-    {
-        if (OptionableByteConstructor == null)
-        {
-            return null;
-        }
-
-        try
-        {
-            return OptionableByteConstructor.Invoke(new object[] { value, hasValue ? (byte)1 : (byte)0 });
-        }
-        catch
-        {
-            return null;
         }
     }
 
@@ -3852,8 +3852,6 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
                 playerView.RPC("SyncInventoryRPC", RpcTarget.All, payload, true);
             }
         }
-
-        ApplyEquippedSelection(player, character, snapshot);
     }
 
     private static void SetItemSlot(ItemSlot slot, ItemSlotSnapshot snapshot)
@@ -5564,30 +5562,23 @@ public sealed class SaveManagerPlugin : BaseUnityPlugin
         SetBackpackSlotInstanceData(player, null);
     }
 
-    private GamePlayer FindPlayer(PlayerSnapshot snapshot)
+    private GamePlayer FindPlayer(PlayerSnapshot snapshot, List<PlayerSnapshot> savedPlayers, out string reason)
     {
-        GamePlayer[] players = UnityObject.FindObjectsByType<GamePlayer>(FindObjectsSortMode.None);
-        if (snapshot.actorNumber > 0)
+        if (!PlayerRestoration.HasUniqueSavedName(snapshot, savedPlayers))
         {
-            GamePlayer byActor = players.FirstOrDefault(p =>
-            {
-                PhotonView photonView = GetPhotonView((Component)p);
-                RealtimePlayer owner = photonView != null ? photonView.Owner : null;
-                return owner != null && owner.ActorNumber == snapshot.actorNumber;
-            });
-
-            if (byActor != null)
-            {
-                return byActor;
-            }
+            reason = "saved player name is missing or duplicated; identity is ambiguous";
+            return null;
         }
 
-        return players.FirstOrDefault(p =>
+        GamePlayer[] players = UnityObject.FindObjectsByType<GamePlayer>(FindObjectsSortMode.None);
+        return PlayerRestoration.FindUniquePlayer(snapshot, players, player =>
         {
-            PhotonView photonView = GetPhotonView((Component)p);
+            PhotonView photonView = GetPhotonView((Component)player);
             RealtimePlayer owner = photonView != null ? photonView.Owner : null;
-            return owner != null && string.Equals(owner.NickName, snapshot.playerName, StringComparison.OrdinalIgnoreCase);
-        });
+            bool connected = owner != null && !owner.IsInactive
+                && (!PhotonNetwork.InRoom || PhotonNetwork.CurrentRoom?.Players.ContainsKey(owner.ActorNumber) == true);
+            return connected ? owner.NickName : null;
+        }, out reason);
     }
 
     private void RefreshSaveFileList()

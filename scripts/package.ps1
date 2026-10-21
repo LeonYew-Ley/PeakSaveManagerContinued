@@ -30,8 +30,12 @@ foreach ($file in @(
     '.gitignore', '.gitattributes', 'thunderstore.toml', 'icon.png', 'assets/icon-original.png', 'Build.ps1',
     'src/PeakSaveManager/PeakSaveManager.csproj', 'src/PeakSaveManager/SaveManagerPlugin.cs',
     'src/PeakSaveManager/SaveModels.cs', 'src/PeakSaveManager/ItemUsesRestoration.cs',
-    'tools/Verify-ItemUsageData.ps1', 'tools/Verify-Compatibility.ps1',
+    'src/PeakSaveManager/PlayerLoadRestoration.cs', 'src/PeakSaveManager/PlayerLoadOwner.cs',
+    'src/PeakSaveManager/PlayerRestoration.cs',
+    'tools/Verify-ItemUsageData.ps1', 'tools/Verify-Compatibility.ps1', 'tools/Verify-PlayerRestoration.ps1',
     'tools/SaveVerificationTests/SaveVerificationTests.csproj', 'tools/SaveVerificationTests/Program.cs',
+    'tools/SaveVerificationTests/PlayerLoadRestorationTests.cs', 'tools/SaveVerificationTests/PlayerRestorationTests.cs',
+    'tools/SaveVerificationTests/MergedPlayerLoadTests.cs',
     'scripts/create-icon.py', 'scripts/package.ps1', 'scripts/publish.ps1',
     '.github/pull_request_template.md', '.github/ISSUE_TEMPLATE/bug_report.yml',
     '.github/ISSUE_TEMPLATE/config.yml', '.github/ISSUE_TEMPLATE/feature_request.yml', '.github/ISSUE_TEMPLATE/help_question.yml'
