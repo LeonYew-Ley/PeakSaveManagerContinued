@@ -22,6 +22,12 @@ internal interface IPlayerLoadTarget
     void Finish(bool succeeded);
 }
 
+internal interface IPlayerLandingTarget
+{
+    bool RequiresStableLanding { get; }
+    bool IsLandingStable { get; }
+}
+
 internal static class PlayerLoadRestoration
 {
     internal const float WarpTimeoutSeconds = 10f;
@@ -66,6 +72,20 @@ internal static class PlayerLoadRestoration
 
             CheckAvailable(target);
             target.HaltMotion();
+            if (target is IPlayerLandingTarget landing && landing.RequiresStableLanding)
+            {
+                deadline = target.Realtime + 4f;
+                float stableSince = -1f;
+                while (true)
+                {
+                    Check(target, deadline, "Player did not settle on stable ground after load.");
+                    if (!landing.IsLandingStable) stableSince = -1f;
+                    else if (stableSince < 0f) stableSince = target.Realtime;
+                    else if (target.Realtime - stableSince >= 0.35f) break;
+                    // Let real physics settle; do not freeze or clear velocity every frame.
+                    yield return null;
+                }
+            }
             succeeded = true;
         }
         finally

@@ -9,6 +9,7 @@ internal static class PlayerLoadRestorationTests
     {
         SelectionCases();
         WorkflowCases();
+        LandingCases();
         Console.WriteLine($"{cases} player-load selection/ordering/failure regression cases passed. Unity/Photon physics was not simulated.");
     }
 
@@ -164,10 +165,52 @@ internal static class PlayerLoadRestorationTests
         if (!condition) throw new InvalidOperationException(message);
     }
 
-    private sealed class FakeTarget : IPlayerLoadTarget
+    private static void LandingCases()
+    {
+        var target = new FakeTarget { RequiresStableLanding = true, IsEquipmentReady = true };
+        var routine = PlayerLoadRestoration.Restore(target);
+        Step(routine, target);
+        target.IsWarping = false;
+        target.IsAtDestination = target.WarpCompleted = true;
+        Step(routine, target);
+        Assert(!target.Actions.Contains("success"), "Teleport completion alone must not confirm grounded save");
+        int halts = target.Actions.Count(a => a == "halt");
+        target.IsLandingStable = true;
+        Step(routine, target);
+        target.IsLandingStable = false;
+        Step(routine, target);
+        target.IsLandingStable = true;
+        Step(routine, target);
+        Step(routine, target);
+        Assert(!routine.MoveNext() && target.Actions.Last() == "success", "Require continuously stable interval after slip");
+        Assert(target.Actions.Count(a => a == "halt") == halts, "Landing wait must not freeze physics");
+        cases++;
+
+        target = new FakeTarget { RequiresStableLanding = true, IsEquipmentReady = true };
+        routine = PlayerLoadRestoration.Restore(target);
+        Step(routine, target);
+        target.IsWarping = false;
+        target.IsAtDestination = target.WarpCompleted = true;
+        Step(routine, target);
+        ExpectTimeout(routine, target, "Unsupported landing cannot report success");
+
+        target = new FakeTarget { RequiresStableLanding = true, IsEquipmentReady = true };
+        routine = PlayerLoadRestoration.Restore(target);
+        Step(routine, target);
+        target.IsWarping = false;
+        target.IsAtDestination = target.WarpCompleted = true;
+        Step(routine, target);
+        ((IDisposable)routine).Dispose();
+        Assert(target.Actions.Last() == "failure", "Cancelled landing cleans up");
+        cases++;
+    }
+
+    private sealed class FakeTarget : IPlayerLoadTarget, IPlayerLandingTarget
     {
         internal readonly List<string> Actions = new();
         internal bool ThrowOnEquip;
+        public bool RequiresStableLanding { get; set; }
+        public bool IsLandingStable { get; set; }
         public bool IsAvailable { get; set; } = true;
         public float Realtime { get; set; }
         public bool IsWarping { get; set; }

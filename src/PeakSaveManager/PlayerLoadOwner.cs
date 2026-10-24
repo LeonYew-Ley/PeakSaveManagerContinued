@@ -17,9 +17,8 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
     // Uncached, targeted, reliable messages. The GUID and protocol version keep
     // unrelated mods using the same application event code out of this handler.
     private const byte PlayerLoadEventCode = 173;
-    // Includes acknowledged luggage restoration on every room participant.
-    // Older clients must not acknowledge an unsupported world restore.
-    private const int PlayerLoadProtocol = 4;
+    // All owners must verify that grounded saves actually settle after warp.
+    private const int PlayerLoadProtocol = 5;
     private const int PlayerLoadRequestLifetimeMs = 30000;
     private readonly Dictionary<string, OwnerLoadReply> ownerLoadReplies = new Dictionary<string, OwnerLoadReply>();
     private readonly HashSet<int> ownerLoadsInProgress = new HashSet<int>();
@@ -34,6 +33,7 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
 
     private IEnumerator RestoreOnPlayerOwnerRoutine(Character character, PlayerSnapshot snapshot)
     {
+        if (snapshot != null) snapshot = ResolvePlayerLanding(character, snapshot);
         PhotonView view = GetPhotonView(character);
         if (view == null || view.IsMine)
         {
@@ -182,7 +182,7 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
             SendPlayerLoadEvent(requester, "reply", requestId, viewId, expiresAt, error);
     }
 
-    private sealed class UnityPlayerLoadTarget : IPlayerLoadTarget
+    private sealed class UnityPlayerLoadTarget : IPlayerLoadTarget, IPlayerLandingTarget
     {
         private static readonly FieldInfo WarpRoutineField = AccessTools.Field(typeof(Character), "_warpRoutine");
         private static readonly WarpStatusLock StatusLock = new WarpStatusLock(typeof(Character));
@@ -218,6 +218,17 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
         public bool IsWarping => character != null && character.warping;
         public bool WarpCompleted => warpCompleted;
         public bool IsAtDestination => character != null && Vector3.Distance(character.Center, snapshot.position.ToUnity()) <= 0.75f;
+        public bool RequiresStableLanding => LandingSelection.NeedsSupport(snapshot.character);
+        public bool IsLandingStable
+        {
+            get
+            {
+                if (!IsAvailable || !character.data.isGrounded || !IsAtDestination) return false;
+                foreach (Bodypart part in character.refs.ragdoll.partList)
+                    if (part != null && part.Rig != null && part.Rig.linearVelocity.sqrMagnitude > 2.25f) return false;
+                return true;
+            }
+        }
         public bool IsEquipmentReady
         {
             get

@@ -31,7 +31,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.lucasandersen.peakallyouneedsavemanager";
     public const string PluginName = "The All You Need Save Manager Continued";
-    public const string PluginVersion = "1.2.3";
+    public const string PluginVersion = "1.2.4";
 
     private const string SaveFilePattern = "*.json";
 
@@ -3008,6 +3008,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 
         isLoading = true;
         worldRestoreWarnings.Clear();
+        landingRestoreWarnings.Clear();
         SetStatus("Loading save...", Color.cyan, 10f);
         try
         {
@@ -3201,10 +3202,11 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         }
 
         RestoreRunMetadata(envelope.metadata);
-        if (appliedCount < envelope.players.Count || worldRestoreWarnings.Count > 0)
+        if (appliedCount < envelope.players.Count || worldRestoreWarnings.Count > 0 || landingRestoreWarnings.Count > 0)
         {
             string worldSummary = worldRestoreWarnings.Count > 0
                 ? $" Skipped {worldRestoreWarnings.Count} unmatched luggage states." : "";
+            if (landingRestoreWarnings.Count > 0) worldSummary += " " + string.Join("; ", landingRestoreWarnings) + ".";
             Logger.LogWarning($"Load partially restored '{fullPath}' ({appliedCount}/{envelope.players.Count} players).{worldSummary} See skipped-state reasons above.");
             SetStatus($"Partial load: restored {appliedCount}/{envelope.players.Count} saved players.{worldSummary} See log.", Color.yellow, 9f);
         }
@@ -4079,9 +4081,12 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
             yield break;
         }
 
+        // Missing historical props get one readiness window for the whole load,
+        // rather than keeping the player at the segment entrance for 3 x 5s.
+        float luggageReadyDeadline = Time.realtimeSinceStartup + 5f;
         RestoreCampfires(envelope.campfires);
         RestoreMirageContainerStates(envelope.containerStates);
-        IEnumerator luggage0 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates);
+        IEnumerator luggage0 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates, luggageReadyDeadline);
         using (luggage0 as IDisposable) { while (luggage0.MoveNext()) yield return luggage0.Current; }
         RestoreWorldObjects(envelope.worldObjects, envelope.formatVersion);
         yield return new WaitForSeconds(0.2f);
@@ -4089,12 +4094,12 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         // Run a second pass after objects finish spawning to improve fidelity.
         RestoreCampfires(envelope.campfires);
         RestoreMirageContainerStates(envelope.containerStates);
-        IEnumerator luggage1 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates);
+        IEnumerator luggage1 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates, luggageReadyDeadline);
         using (luggage1 as IDisposable) { while (luggage1.MoveNext()) yield return luggage1.Current; }
         RestoreWorldObjects(envelope.worldObjects, envelope.formatVersion);
         yield return new WaitForSeconds(1.1f);
         RestoreMirageContainerStates(envelope.containerStates);
-        IEnumerator luggage2 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates);
+        IEnumerator luggage2 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates, luggageReadyDeadline);
         using (luggage2 as IDisposable) { while (luggage2.MoveNext()) yield return luggage2.Current; }
         RestoreWorldObjects(envelope.worldObjects, envelope.formatVersion);
         RestoreGroundItems(envelope.groundItems);

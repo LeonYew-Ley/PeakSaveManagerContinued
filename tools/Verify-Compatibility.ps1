@@ -37,6 +37,16 @@ try {
         throw 'The game rope-shooter ammo contract changed; review before release.'
     }
     $pluginType = $plugin.MainModule.GetType('PEAKSaveManager.SaveManagerPlugin')
+    $conditionalGround = $game.MainModule.GetType('CollisionModifier').Fields | Where-Object Name -eq 'hasStandableRange'
+    if (!$conditionalGround -or $conditionalGround.FieldType.FullName -ne 'System.Boolean') {
+        throw 'Native conditional standability contract changed.'
+    }
+    $landingResolver = $pluginType.Methods | Where-Object Name -eq 'ResolvePlayerLanding'
+    foreach ($required in @('NeedsSupport', 'HasLandingSupport', 'RaycastAll', 'Closest')) {
+        if (!($landingResolver.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq $required })) {
+            throw "Live landing resolution must use verified support/selection policy: $required"
+        }
+    }
     $luggage = $game.MainModule.GetType('Luggage')
     $luggageState = $luggage.NestedTypes | Where-Object Name -eq 'LuggageState'
     foreach ($state in @(@{ Name = 'Closed'; Value = 0 }, @{ Name = 'Open'; Value = 1 })) {
@@ -74,7 +84,7 @@ try {
         throw 'Skipped luggage must reach the final partial-load result.'
     }
     $protocol = $pluginType.Fields | Where-Object Name -eq 'PlayerLoadProtocol'
-    if ($protocol.Constant -ne 4) { throw 'Luggage restoration requires the updated client protocol.' }
+    if ($protocol.Constant -ne 5) { throw 'Stable landing restoration requires the updated client protocol.' }
     $luggageTarget = $pluginType.NestedTypes | Where-Object Name -eq 'UnityLuggageRestoreTarget'
     $cancel = $luggageTarget.Methods | Where-Object Name -eq 'CancelOpening'
     if (!($cancel.Body.Instructions | Where-Object { $_.Operand -and $_.Operand.ToString() -like '*StopAllCoroutines*' })) {

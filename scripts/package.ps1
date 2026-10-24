@@ -32,6 +32,7 @@ foreach ($file in @(
     'src/PeakSaveManager/SaveModels.cs', 'src/PeakSaveManager/ItemUsesRestoration.cs',
     'src/PeakSaveManager/PlayerLoadRestoration.cs', 'src/PeakSaveManager/PlayerLoadOwner.cs',
     'src/PeakSaveManager/PlayerRestoration.cs',
+    'src/PeakSaveManager/LandingSelection.cs', 'src/PeakSaveManager/PlayerLandingRestoration.cs',
     'src/PeakSaveManager/SavedMapRestoration.cs', 'src/PeakSaveManager/SavedMapLoader.cs',
     'src/PeakSaveManager/WarpStatusLock.cs',
     'src/PeakSaveManager/LuggageRestoration.cs', 'src/PeakSaveManager/LuggageNetworkRestoration.cs',
@@ -41,6 +42,7 @@ foreach ($file in @(
     'tools/SaveVerificationTests/MergedPlayerLoadTests.cs',
     'tools/SaveVerificationTests/SavedMapRestorationTests.cs', 'tools/SaveVerificationTests/WarpStatusLockTests.cs',
     'tools/SaveVerificationTests/LuggageRestorationTests.cs',
+    'tools/SaveVerificationTests/LandingSelectionTests.cs',
     'scripts/create-icon.py', 'scripts/package.ps1', 'scripts/publish.ps1',
     '.github/pull_request_template.md', '.github/ISSUE_TEMPLATE/bug_report.yml',
     '.github/ISSUE_TEMPLATE/config.yml', '.github/ISSUE_TEMPLATE/feature_request.yml', '.github/ISSUE_TEMPLATE/help_question.yml'

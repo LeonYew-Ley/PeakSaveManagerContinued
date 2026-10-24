@@ -1,3 +1,11 @@
+## 1.2.4 — Stable landings for unsupported saved positions
+
+- Keep safe grounded save positions; when current geometry no longer supports them, search for static, walkable ground within 8m horizontally, 8m vertically and 10m total. Check nine support points and body clearance, excluding steep slopes, conditional/bounce/damaging surfaces and trigger volumes. Fail explicitly if no safe nearby landing exists.
+- Report each relocated player's offset in the load result and log, without rewriting the save. Leave airborne, climbing, dead and unconscious snapshots on their original restoration path.
+- Require a continuously grounded, low-speed interval after owner teleport and equipment restoration before confirming success. Use player-owner protocol 5 so all room participants need 1.2.4.
+- Share one 5-second luggage-readiness budget across the three restoration passes, instead of waiting up to 5 seconds per pass.
+- Managed/API regressions pass; actual Unity/Photon gameplay has not been independently verified.
+
 ## 1.2.3 — Continue player restoration when historical luggage is missing
 
 - Fix the 1.2.2 regression where a missing or ambiguous saved luggage object aborted loading after switching segments, leaving scouts at the segment entrance before their saved positions and inventories were restored.

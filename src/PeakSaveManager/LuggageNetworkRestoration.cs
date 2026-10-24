@@ -152,7 +152,7 @@ public sealed partial class SaveManagerPlugin
         if (PhotonNetwork.InRoom) SendPlayerLoadEvent(actor, "reply", request, 0, expiresAt, error ?? "");
     }
 
-    private IEnumerator RestoreLuggageRoutine(List<ContainerSnapshot> containers, List<LuggageSnapshot> legacy)
+    private IEnumerator RestoreLuggageRoutine(List<ContainerSnapshot> containers, List<LuggageSnapshot> legacy, float readyDeadline)
     {
         List<LuggageRestoreState> snapshots = new List<LuggageRestoreState>();
         if (containers != null && containers.Count > 0)
@@ -183,7 +183,6 @@ public sealed partial class SaveManagerPlugin
         ValidateLuggageApi();
         LuggageBatch batch = new LuggageBatch { scene = SceneManager.GetActiveScene().name, revision = ++luggageRevision };
         List<Luggage> targets = new List<Luggage>();
-        float deadline = Time.realtimeSinceStartup + 5f;
         while (true)
         {
             if (batch.scene != SceneManager.GetActiveScene().name || (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient))
@@ -191,7 +190,7 @@ public sealed partial class SaveManagerPlugin
             List<Luggage> available = UnityObject.FindObjectsByType<Luggage>(FindObjectsSortMode.None).Where(x => x != null).ToList();
             List<LuggageRestoreState> identities = available.Select(CaptureLiveLuggage).ToList();
             int[] matches = LuggageRestoration.FindMatches(snapshots, identities, PhotonNetwork.InRoom);
-            if (matches.Any(index => index < 0) && Time.realtimeSinceStartup < deadline)
+            if (matches.Any(index => index < 0) && Time.realtimeSinceStartup < readyDeadline)
             {
                 yield return null;
                 continue;

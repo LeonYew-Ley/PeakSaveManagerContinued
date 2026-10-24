@@ -6,14 +6,18 @@ All-in-one save manager for PEAK. Save a run, load it later, and restore the run
 
 An independent community continuation of **llucasandersen's The All You Need Save Manager**, maintained by **LeonYew / LeonYew-Ley**. Original source and attribution are retained in [NOTICE.md](NOTICE.md).
 
-## Continued 1.2.3
+## Continued 1.2.4
+
+- Preserve supported saved positions; find nearby stable ground for unsafe grounded saves, with explicit displacement reporting. Search is limited to 8m horizontally / 8m vertically and 10m total, and does not rewrite saves.
+- Check support, slope and body clearance; confirm grounded players actually settle after teleport. No safe nearby ground produces an explicit load failure.
+- Limit missing-luggage readiness waits to one shared 5-second budget.
 
 - Fix luggage that looks closed but cannot be opened after loading. Restore appearance, interaction state and attached objects together on every client.
 - Restore closed boxes in multiplayer, cancel delayed openings and clear stale loot history. Restoring an open box never creates more loot.
 - Match same-path boxes by type, name and nearby position. Missing or ambiguous boxes are skipped with a partial-load warning so player position and inventory restoration can continue.
 - Confirm restoration on all current clients and send fresh live state to late joiners. Keep the saved-map, player, inventory and format 6 compatibility fixes.
 
-**Every player in the room must install 1.2.3 and restart PEAK.** Automated managed and game API checks pass; actual Unity/Photon multiplayer testing remains pending.
+**Every player in the room must install 1.2.4 and restart PEAK.** Automated managed and game API checks pass; actual Unity/Photon multiplayer testing remains pending.
 
 ## What It Syncs
 
