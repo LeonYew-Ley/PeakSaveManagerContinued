@@ -34,6 +34,7 @@ internal static class Program
             MergedPlayerLoadTests.Run();
             SavedMapRestorationTests.Run();
             WarpStatusLockTests.Run();
+            LuggageRestorationTests.Run();
 
             Console.WriteLine("Save/load verification passed for deployable categories: piton, rope, chain, scout, bean, fungus, checkpoint, stove.");
             return 0;

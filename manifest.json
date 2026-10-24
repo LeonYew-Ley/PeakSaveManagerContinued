@@ -1,8 +1,8 @@
 {
   "name": "The_All_You_Need_Save_Manager_Continued",
-  "version_number": "1.2.1",
+  "version_number": "1.2.2",
   "website_url": "https://github.com/LeonYew-Ley/PeakSaveManagerContinued",
-  "description": "Continued PEAK save manager with player revival, owner-confirmed teleport and held-item restoration. Host and teammates need the same version. Preserves existing saves and settings.",
+  "description": "Continued PEAK save manager with synchronized luggage, player revival, owner-confirmed teleport and inventory restoration. Every player in the room needs the same version. Keeps existing saves and settings.",
   "dependencies": [
     "BepInEx-BepInExPack_PEAK-5.4.2403"
   ]

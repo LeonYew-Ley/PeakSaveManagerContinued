@@ -1,3 +1,12 @@
+## 1.2.2 — Luggage restoration and multiplayer synchronization
+
+- Restore luggage appearance, interaction state and the native available-luggage list together on the host and all current clients. Fix closed-looking boxes that could not be opened after loading.
+- Restore closed snapshots in multiplayer, cancel pending native opening routines and reset stale loot history so the box can be opened normally again. Loading an open box never regenerates loot.
+- Synchronize attached objects and respawn-chest skeleton state. Late joiners receive the current live state, with older pending messages prevented from overriding newer loads.
+- Match same-path boxes by prefab type, name and nearby position. Missing or ambiguous boxes report a load failure instead of applying state to an arbitrary distant box.
+- Require every player in the room to use 1.2.2, check support before restoring world objects and wait for client acknowledgements. World restoration errors now reach the load failure handler.
+- Keep format 6 saves compatible; new saves retain attached-object activation explicitly. Add luggage behavior, identity, message-order and game API checks. Unity/Photon gameplay remains unverified.
+
 ## 1.2.1 — Saved maps and PEAK 3.0 compatibility
 
 - Preload the resource bundle for the saved scene before checking scene availability. Explicit saved map names/numbers never fall back to a remapped daily index or the current scene.

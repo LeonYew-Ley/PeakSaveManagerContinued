@@ -222,6 +222,8 @@ public sealed class LuggageSnapshot
 
     public int state;
 
+    public bool? activatedObjectActive;
+
     public bool isRespawnChest;
 
     public bool respawnChestSpent;
@@ -241,6 +243,8 @@ public sealed class ContainerSnapshot
     public Vector3Snapshot position = new Vector3Snapshot();
 
     public int state;
+
+    public bool? activatedObjectActive;
 
     public bool boolA;
 

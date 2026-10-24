@@ -17,9 +17,9 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
     // Uncached, targeted, reliable messages. The GUID and protocol version keep
     // unrelated mods using the same application event code out of this handler.
     private const byte PlayerLoadEventCode = 173;
-    // This build supports PEAK 3.0's status lock as well as post-warp life
-    // restoration. Older clients must not acknowledge an unsupported restore.
-    private const int PlayerLoadProtocol = 3;
+    // Includes acknowledged luggage restoration on every room participant.
+    // Older clients must not acknowledge an unsupported world restore.
+    private const int PlayerLoadProtocol = 4;
     private const int PlayerLoadRequestLifetimeMs = 30000;
     private readonly Dictionary<string, OwnerLoadReply> ownerLoadReplies = new Dictionary<string, OwnerLoadReply>();
     private readonly HashSet<int> ownerLoadsInProgress = new HashSet<int>();
@@ -109,10 +109,16 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
             return;
         }
 
-        // Never accept another client's request to move or equip this player.
-        if ((kind != "probe" && kind != "restore") || PhotonNetwork.MasterClient == null
+        // World and player changes may only be requested by the current host.
+        if ((kind != "probe" && kind != "restore" && kind != "world-probe" && kind != "luggage") || PhotonNetwork.MasterClient == null
             || photonEvent.Sender != PhotonNetwork.MasterClient.ActorNumber
             || unchecked(expiresAt - PhotonNetwork.ServerTimestamp) <= 0) return;
+
+        if (kind == "world-probe" || kind == "luggage")
+        {
+            if (viewId == 0) HandleLuggageRequest(kind, payload, photonEvent.Sender, requestId, expiresAt);
+            return;
+        }
 
         try
         {

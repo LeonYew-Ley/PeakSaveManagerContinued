@@ -4,9 +4,9 @@
     <LangVersion>latest</LangVersion>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AssemblyName>PeakSaveManagerContinued</AssemblyName>
-    <Version>1.2.1</Version>
-    <AssemblyVersion>1.2.1.0</AssemblyVersion>
-    <FileVersion>1.2.1.0</FileVersion>
+    <Version>1.2.2</Version>
+    <AssemblyVersion>1.2.2.0</AssemblyVersion>
+    <FileVersion>1.2.2.0</FileVersion>
     <Product>The All You Need Save Manager Continued</Product>
     <Nullable>disable</Nullable>
     <OutputPath>..\..\build\</OutputPath>
@@ -44,6 +44,9 @@
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(GameManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(GameManagedPath)\UnityEngine.AnimationModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>$(GameManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>

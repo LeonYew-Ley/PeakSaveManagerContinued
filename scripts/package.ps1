@@ -34,11 +34,13 @@ foreach ($file in @(
     'src/PeakSaveManager/PlayerRestoration.cs',
     'src/PeakSaveManager/SavedMapRestoration.cs', 'src/PeakSaveManager/SavedMapLoader.cs',
     'src/PeakSaveManager/WarpStatusLock.cs',
+    'src/PeakSaveManager/LuggageRestoration.cs', 'src/PeakSaveManager/LuggageNetworkRestoration.cs',
     'tools/Verify-ItemUsageData.ps1', 'tools/Verify-Compatibility.ps1', 'tools/Verify-PlayerRestoration.ps1',
     'tools/SaveVerificationTests/SaveVerificationTests.csproj', 'tools/SaveVerificationTests/Program.cs',
     'tools/SaveVerificationTests/PlayerLoadRestorationTests.cs', 'tools/SaveVerificationTests/PlayerRestorationTests.cs',
     'tools/SaveVerificationTests/MergedPlayerLoadTests.cs',
     'tools/SaveVerificationTests/SavedMapRestorationTests.cs', 'tools/SaveVerificationTests/WarpStatusLockTests.cs',
+    'tools/SaveVerificationTests/LuggageRestorationTests.cs',
     'scripts/create-icon.py', 'scripts/package.ps1', 'scripts/publish.ps1',
     '.github/pull_request_template.md', '.github/ISSUE_TEMPLATE/bug_report.yml',
     '.github/ISSUE_TEMPLATE/config.yml', '.github/ISSUE_TEMPLATE/feature_request.yml', '.github/ISSUE_TEMPLATE/help_question.yml'

@@ -37,6 +37,47 @@ try {
         throw 'The game rope-shooter ammo contract changed; review before release.'
     }
     $pluginType = $plugin.MainModule.GetType('PEAKSaveManager.SaveManagerPlugin')
+    $luggage = $game.MainModule.GetType('Luggage')
+    $luggageState = $luggage.NestedTypes | Where-Object Name -eq 'LuggageState'
+    foreach ($state in @(@{ Name = 'Closed'; Value = 0 }, @{ Name = 'Open'; Value = 1 })) {
+        $field = @($luggageState.Fields | Where-Object Name -eq $state.Name)
+        if ($field.Count -ne 1 -or $field[0].Constant -ne $state.Value) { throw 'Native luggage states changed.' }
+    }
+    foreach ($field in @('state', 'ALL_LUGGAGE', 'activateOnOpen')) {
+        if (!($luggage.Fields | Where-Object Name -eq $field)) { throw "Native luggage field missing: $field" }
+    }
+    if (!($luggage.Methods | Where-Object { $_.Name -eq 'OnCharacterRegistered' -and $_.Parameters[0].ParameterType.FullName -eq 'Character' })) {
+        throw 'Native luggage late-join synchronization changed.'
+    }
+    $joinPatch = ($pluginType.NestedTypes | Where-Object Name -eq 'RestoredLuggageJoinPatch').Methods | Where-Object Name -eq 'Postfix'
+    if (($joinPatch.Parameters.Name -join ',') -ne '__instance,__0') {
+        throw 'The luggage join patch must bind by position, independent of native parameter names.'
+    }
+    $tracker = $game.MainModule.GetType('Peak.SpawnedItemTracker')
+    foreach ($field in @('_historyFromSave', '_spawnedItems')) {
+        if (!($tracker.Fields | Where-Object Name -eq $field)) { throw "Native luggage spawn history field missing: $field" }
+    }
+    if (!($tracker.Properties | Where-Object { $_.Name -eq 'HasSpawnHistory' -and $_.SetMethod })) {
+        throw 'Native luggage history reset setter changed.'
+    }
+    $luggageApply = $pluginType.Methods | Where-Object Name -eq 'ApplyRestoredLuggage'
+    if (!($luggageApply.Body.Instructions | Where-Object { $_.Operand -and $_.Operand.ToString() -like '*LuggageRestoration::Apply(*' })) {
+        throw 'Live luggage restoration must use the behavior-tested coordinator.'
+    }
+    $protocol = $pluginType.Fields | Where-Object Name -eq 'PlayerLoadProtocol'
+    if ($protocol.Constant -ne 4) { throw 'Luggage restoration requires the updated client protocol.' }
+    $luggageTarget = $pluginType.NestedTypes | Where-Object Name -eq 'UnityLuggageRestoreTarget'
+    $cancel = $luggageTarget.Methods | Where-Object Name -eq 'CancelOpening'
+    if (!($cancel.Body.Instructions | Where-Object { $_.Operand -and $_.Operand.ToString() -like '*StopAllCoroutines*' })) {
+        throw 'Luggage restoration must cancel pending native opening routines.'
+    }
+    $visual = $luggageTarget.Methods | Where-Object Name -eq 'SetVisual'
+    foreach ($call in @('Rebind', 'Play', 'Update', 'set_fireEvents')) {
+        if (!($visual.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq $call })) {
+            throw "Luggage appearance restoration is incomplete: $call"
+        }
+    }
+    Write-Output 'Luggage state/list/history APIs, late-join hook, client protocol, animation reset and live coordinator checks passed.'
     # These private native members are used only to clean up our own failed warp.
     # String-based reflection does not appear in the normal member-reference scan.
     $character = $game.MainModule.GetType('Character')

@@ -31,7 +31,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.lucasandersen.peakallyouneedsavemanager";
     public const string PluginName = "The All You Need Save Manager Continued";
-    public const string PluginVersion = "1.2.1";
+    public const string PluginVersion = "1.2.2";
 
     private const string SaveFilePattern = "*.json";
 
@@ -48,8 +48,6 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
     private static readonly MethodInfo CampfireHideLogsMethod = AccessTools.Method(typeof(Campfire), "HideLogs");
 
     private static readonly FieldInfo LuggageStateField = AccessTools.Field(typeof(Luggage), "state");
-
-    private static readonly MethodInfo LuggageOpenRpcMethod = AccessTools.Method(typeof(Luggage), "OpenLuggageRPC");
 
     private static readonly MethodInfo MenuWindowOpenMethod = AccessTools.Method(typeof(MenuWindow), "Open");
 
@@ -1008,41 +1006,6 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         }
     }
 
-    private static void SetLuggageStateRaw(Luggage luggage, int rawState)
-    {
-        if (luggage == null || LuggageStateField == null)
-        {
-            return;
-        }
-
-        int clamped = Mathf.Max(0, rawState);
-        try
-        {
-            Type fieldType = LuggageStateField.FieldType;
-            if (fieldType != null && fieldType.IsEnum)
-            {
-                Array enumValues = Enum.GetValues(fieldType);
-                if (enumValues != null && enumValues.Length > 0)
-                {
-                    int max = enumValues.Cast<object>()
-                        .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture))
-                        .DefaultIfEmpty(0)
-                        .Max();
-                    clamped = Mathf.Clamp(clamped, 0, max);
-                }
-            }
-
-            object boxed = fieldType != null && fieldType.IsEnum
-                ? Enum.ToObject(fieldType, clamped)
-                : (object)clamped;
-            LuggageStateField.SetValue(luggage, boxed);
-        }
-        catch
-        {
-            // Ignore raw luggage-state restoration failures.
-        }
-    }
-
     private static PhotonView GetPhotonView(Component component)
     {
         if (component == null)
@@ -1103,7 +1066,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
             // Ignore version-specific reflection failures.
         }
 
-        return false;
+        return respawnChest.skeleton != null && !respawnChest.skeleton.activeSelf;
     }
 
     private static void SetRespawnChestHasRevivedPlayers(RespawnChest respawnChest, bool hasRevivedPlayers)
@@ -2693,7 +2656,8 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
                     objectName = NormalizeObjectName(((UnityObject)luggage).name),
                     objectPath = BuildTransformPath(((Component)luggage).transform),
                     position = new Vector3Snapshot(((Component)luggage).transform.position),
-                    state = GetLuggageState(luggage)
+                    state = GetLuggageState(luggage),
+                    activatedObjectActive = luggage.activateOnOpen != null && luggage.activateOnOpen.activeSelf
                 };
 
                 if (luggage is RespawnChest respawnChest)
@@ -2738,7 +2702,8 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
                     objectName = NormalizeObjectName(((UnityObject)luggage).name),
                     objectPath = BuildTransformPath(((Component)luggage).transform),
                     position = new Vector3Snapshot(((Component)luggage).transform.position),
-                    state = GetLuggageState(luggage)
+                    state = GetLuggageState(luggage),
+                    activatedObjectActive = luggage.activateOnOpen != null && luggage.activateOnOpen.activeSelf
                 };
 
                 if (luggage is RespawnChest respawnChest)
@@ -3192,7 +3157,10 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
             }
         }
 
-        yield return StartCoroutine(RestoreWorldInteractablesRoutine(envelope));
+        IEnumerator worldProbe = SyncLuggageClientsRoutine("world-probe", "");
+        using (worldProbe as IDisposable) { while (worldProbe.MoveNext()) yield return worldProbe.Current; }
+        IEnumerator world = RestoreWorldInteractablesRoutine(envelope);
+        using (world as IDisposable) { while (world.MoveNext()) yield return world.Current; }
 
         int appliedCount = 0;
         HashSet<GamePlayer> restoredPlayers = new HashSet<GamePlayer>();
@@ -4109,52 +4077,31 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         }
 
         RestoreCampfires(envelope.campfires);
-        RestoreContainerStates(envelope.containerStates, envelope.luggageStates);
+        RestoreMirageContainerStates(envelope.containerStates);
+        IEnumerator luggage0 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates);
+        using (luggage0 as IDisposable) { while (luggage0.MoveNext()) yield return luggage0.Current; }
         RestoreWorldObjects(envelope.worldObjects, envelope.formatVersion);
         yield return new WaitForSeconds(0.2f);
 
         // Run a second pass after objects finish spawning to improve fidelity.
         RestoreCampfires(envelope.campfires);
-        RestoreContainerStates(envelope.containerStates, envelope.luggageStates);
+        RestoreMirageContainerStates(envelope.containerStates);
+        IEnumerator luggage1 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates);
+        using (luggage1 as IDisposable) { while (luggage1.MoveNext()) yield return luggage1.Current; }
         RestoreWorldObjects(envelope.worldObjects, envelope.formatVersion);
         yield return new WaitForSeconds(1.1f);
-        RestoreContainerStates(envelope.containerStates, envelope.luggageStates);
+        RestoreMirageContainerStates(envelope.containerStates);
+        IEnumerator luggage2 = RestoreLuggageRoutine(envelope.containerStates, envelope.luggageStates);
+        using (luggage2 as IDisposable) { while (luggage2.MoveNext()) yield return luggage2.Current; }
         RestoreWorldObjects(envelope.worldObjects, envelope.formatVersion);
         RestoreGroundItems(envelope.groundItems);
         RestoreWorldObjects(envelope.worldObjects, envelope.formatVersion);
     }
 
-    private void RestoreContainerStates(List<ContainerSnapshot> containerSnapshots, List<LuggageSnapshot> legacyLuggageSnapshots)
+    private void RestoreMirageContainerStates(List<ContainerSnapshot> containerSnapshots)
     {
-        if (containerSnapshots == null || containerSnapshots.Count == 0)
-        {
-            RestoreLuggageStates(legacyLuggageSnapshots);
-            return;
-        }
-
-        Luggage[] sceneLuggage = UnityObject.FindObjectsByType<Luggage>(FindObjectsSortMode.None);
-        List<Luggage> remainingLuggage = new List<Luggage>(sceneLuggage.Where(luggage => luggage != null));
+        if (containerSnapshots == null) return;
         const float maxMatchDistanceSquared = 400f;
-
-        for (int i = 0; i < containerSnapshots.Count; i++)
-        {
-            ContainerSnapshot snapshot = containerSnapshots[i];
-            if (snapshot == null || !IsLuggageContainerSnapshot(snapshot))
-            {
-                continue;
-            }
-
-            Luggage matched = FindLuggageForContainerSnapshot(snapshot, remainingLuggage, maxMatchDistanceSquared)
-                ?? FindLuggageForContainerSnapshot(snapshot, remainingLuggage, float.MaxValue);
-            if (matched == null)
-            {
-                continue;
-            }
-
-            remainingLuggage.Remove(matched);
-            ApplyContainerSnapshot(matched, snapshot);
-        }
-
         MirageLuggage[] mirageObjects = UnityObject.FindObjectsByType<MirageLuggage>(FindObjectsSortMode.None);
         List<MirageLuggage> remainingMirages = new List<MirageLuggage>(mirageObjects.Where(mirage => mirage != null));
         for (int i = 0; i < containerSnapshots.Count; i++)
@@ -4174,45 +4121,6 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 
             remainingMirages.Remove(matched);
             ApplyMirageContainerSnapshot(matched, snapshot);
-        }
-    }
-
-    private void RestoreLuggageStates(List<LuggageSnapshot> luggageSnapshots)
-    {
-        if (luggageSnapshots == null || luggageSnapshots.Count == 0)
-        {
-            return;
-        }
-
-        Luggage[] sceneLuggage = UnityObject.FindObjectsByType<Luggage>(FindObjectsSortMode.None);
-        if (sceneLuggage.Length == 0)
-        {
-            return;
-        }
-
-        List<Luggage> remaining = new List<Luggage>(sceneLuggage);
-        const float maxMatchDistanceSquared = 400f;
-
-        for (int i = 0; i < luggageSnapshots.Count; i++)
-        {
-            LuggageSnapshot snapshot = luggageSnapshots[i];
-            if (snapshot == null)
-            {
-                continue;
-            }
-
-            Luggage matched = FindLuggageForSnapshot(snapshot, remaining, maxMatchDistanceSquared);
-            if (matched == null)
-            {
-                matched = FindLuggageForSnapshot(snapshot, remaining, float.MaxValue);
-                if (matched == null)
-                {
-                    continue;
-                }
-            }
-
-            remaining.Remove(matched);
-            ApplyLuggageSnapshot(matched, snapshot);
         }
     }
 
@@ -4250,25 +4158,6 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 
         return snapshot.containerType.Equals(typeof(MirageLuggage).FullName, StringComparison.OrdinalIgnoreCase)
             || snapshot.containerType.EndsWith(".MirageLuggage", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static Luggage FindLuggageForContainerSnapshot(ContainerSnapshot snapshot, List<Luggage> candidates, float maxDistanceSquared)
-    {
-        if (snapshot == null)
-        {
-            return null;
-        }
-
-        LuggageSnapshot legacy = new LuggageSnapshot
-        {
-            objectName = snapshot.objectName,
-            objectPath = snapshot.objectPath,
-            position = snapshot.position ?? new Vector3Snapshot(),
-            state = snapshot.state,
-            isRespawnChest = snapshot.boolA || snapshot.boolB
-        };
-
-        return FindLuggageForSnapshot(legacy, candidates, maxDistanceSquared);
     }
 
     private static MirageLuggage FindMirageForContainerSnapshot(ContainerSnapshot snapshot, List<MirageLuggage> candidates, float maxDistanceSquared)
@@ -4325,42 +4214,6 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         return best;
     }
 
-    private static void ApplyContainerSnapshot(Luggage luggage, ContainerSnapshot snapshot)
-    {
-        if (luggage == null || snapshot == null)
-        {
-            return;
-        }
-
-        int targetState = Mathf.Max(0, snapshot.state);
-        SetLuggageStateRaw(luggage, targetState);
-
-        if (targetState > 0)
-        {
-            try
-            {
-                PhotonView view = GetPhotonView((Component)luggage);
-                if (view != null)
-                {
-                    view.RPC("OpenLuggageRPC", RpcTarget.All, false);
-                }
-                else
-                {
-                    LuggageOpenRpcMethod?.Invoke(luggage, new object[] { false });
-                }
-            }
-            catch
-            {
-                // Ignore open state restoration failures.
-            }
-        }
-
-        if (luggage is RespawnChest respawnChest)
-        {
-            SetRespawnChestState(respawnChest, snapshot.boolA, snapshot.boolB);
-        }
-    }
-
     private static void ApplyMirageContainerSnapshot(MirageLuggage mirage, ContainerSnapshot snapshot)
     {
         if (mirage == null || snapshot == null)
@@ -4380,128 +4233,6 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
             {
                 // Ignore mirage visual-state restoration failures.
             }
-        }
-    }
-
-    private static Luggage FindClosestLuggage(Vector3 targetPosition, List<Luggage> candidates, float maxDistanceSquared)
-    {
-        Luggage best = null;
-        float bestDistance = maxDistanceSquared;
-
-        for (int i = 0; i < candidates.Count; i++)
-        {
-            Luggage candidate = candidates[i];
-            if (candidate == null)
-            {
-                continue;
-            }
-
-            float distanceSquared = (((Component)candidate).transform.position - targetPosition).sqrMagnitude;
-            if (distanceSquared <= bestDistance)
-            {
-                bestDistance = distanceSquared;
-                best = candidate;
-            }
-        }
-
-        return best;
-    }
-
-    private static Luggage FindLuggageForSnapshot(LuggageSnapshot snapshot, List<Luggage> candidates, float maxDistanceSquared)
-    {
-        if (snapshot == null || candidates == null || candidates.Count == 0)
-        {
-            return null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(snapshot.objectPath))
-        {
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                Luggage candidate = candidates[i];
-                if (candidate == null)
-                {
-                    continue;
-                }
-
-                string candidatePath = BuildTransformPath(((Component)candidate).transform);
-                if (string.Equals(candidatePath, snapshot.objectPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    return candidate;
-                }
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(snapshot.objectName))
-        {
-            Luggage bestByName = null;
-            float bestDistanceByName = maxDistanceSquared;
-            Vector3 targetPosition = snapshot.position.ToUnity();
-            string snapshotName = NormalizeObjectName(snapshot.objectName);
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                Luggage candidate = candidates[i];
-                if (candidate == null)
-                {
-                    continue;
-                }
-
-                string candidateName = NormalizeObjectName(((UnityObject)candidate).name);
-                if (!string.IsNullOrWhiteSpace(snapshotName) && !string.Equals(candidateName, snapshotName, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                float distanceSquared = (((Component)candidate).transform.position - targetPosition).sqrMagnitude;
-                if (distanceSquared <= bestDistanceByName)
-                {
-                    bestDistanceByName = distanceSquared;
-                    bestByName = candidate;
-                }
-            }
-
-            if (bestByName != null)
-            {
-                return bestByName;
-            }
-        }
-
-        return FindClosestLuggage(snapshot.position.ToUnity(), candidates, maxDistanceSquared);
-    }
-
-    private void ApplyLuggageSnapshot(Luggage luggage, LuggageSnapshot snapshot)
-    {
-        if (luggage == null || snapshot == null)
-        {
-            return;
-        }
-
-        int targetState = Mathf.Max(0, snapshot.state);
-        SetLuggageStateRaw(luggage, targetState);
-
-        if (targetState > 0)
-        {
-            try
-            {
-                PhotonView view = GetPhotonView((Component)luggage);
-                if (view != null)
-                {
-                    view.RPC("OpenLuggageRPC", RpcTarget.All, false);
-                }
-                else
-                {
-                    LuggageOpenRpcMethod?.Invoke(luggage, new object[] { false });
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning($"Failed to restore luggage open state: {ex.Message}");
-            }
-        }
-
-        if (snapshot.isRespawnChest && luggage is RespawnChest respawnChest)
-        {
-            SetRespawnChestState(respawnChest, snapshot.respawnChestSpent, snapshot.respawnChestRevivedPlayers);
         }
     }
 

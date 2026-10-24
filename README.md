@@ -6,17 +6,14 @@ All-in-one save manager for PEAK. Save a run, load it later, and restore the run
 
 An independent community continuation of **llucasandersen's The All You Need Save Manager**, maintained by **LeonYew / LeonYew-Ley**. Original source and attribution are retained in [NOTICE.md](NOTICE.md).
 
-## Continued 1.2.1
+## Continued 1.2.2
 
-- Loads the saved map's resource bundle before testing availability, preventing a saved map from silently turning into another daily map.
-- Supports PEAK 3.0 teleport status locking and checks the saved biome before restoring players or world state. Missing or changed maps report an error.
+- Fix luggage that looks closed but cannot be opened after loading. Restore appearance, interaction state and attached objects together on every client.
+- Restore closed boxes in multiplayer, cancel delayed openings and clear stale loot history. Restoring an open box never creates more loot.
+- Match same-path boxes by type, name and nearby position. Missing or ambiguous boxes report a load failure instead of changing another box.
+- Confirm restoration on all current clients and send fresh live state to late joiners. Keep the saved-map, player, inventory and format 6 compatibility fixes.
 
-- Restores saved living scouts through native revival, including teammates who are currently dead. Scouts saved as dead remain dead.
-- Waits for each player's client to finish teleporting and attach the saved held item, then reports completion.
-- Clears player motion on load and restores saved life state, stamina and collision after teleporting.
-- Keeps the backpack and item-use fixes from 1.1.0, with existing saves and configuration compatible.
-
-**The host and every restored teammate must install 1.2.1 and restart PEAK.** A user confirmed that an existing volcano save enters the volcano again. Full multiplayer restoration testing remains pending.
+**Every player in the room must install 1.2.2 and restart PEAK.** Automated managed and game API checks pass; actual Unity/Photon multiplayer testing remains pending.
 
 ## What It Syncs
 
@@ -84,10 +81,10 @@ If the config file does not exist yet, launch the game once with the mod install
 - New saves also record the live biome. Loading checks this value, or the unambiguous volcano code in legacy volcano saves, before restoring players/world objects. A game update may change a same-named map; old geometry cannot be reconstructed from player snapshots.
 
 - You can load from Airport.
-- You can load while already in a run.
+- You can load while already in a run. Luggage is matched within 20 game units using type, prefab name and position; a missing or ambiguous match stops loading with an error. A game update can change the saved map geometry.
 - In multiplayer, the host controls save and load.
 - Multiplayer loads now restore every saved player that matches, even if the full saved party is not present yet.
-- The host and every restored teammate must install the same build. Loading stops before restoring players if a client does not support this build's restoration protocol.
+- Every player in the room must install the same build, including unmatched scouts. Loading checks client support before restoring world objects and waits for luggage acknowledgements; timeouts and disconnects report a failure.
 - Teleport completion and native held-item attachment are checked on the character's owner before reporting success. Timeouts and disconnects report a load failure.
 - Players resume at rest at the saved position and view. Airborne or climbing saves still need physical support to stand; loading does not move players to a guessed ground position.
 - Living saved scouts use the game's network revival without extra revival penalties before inventory is restored.
@@ -156,7 +153,7 @@ Older release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Validation
 
-Release compilation, saved-map and warp-lock regressions, 36 item-restore cases, 27 player-load workflow cases, 512 life-state combinations, 32 combined life/warp scenarios and save serialization checks pass against installed PEAK 3.0 assemblies. Life-state and combined scenarios each run twice; additional checks cover status replay and all 101 petrify percentages. Compatibility verification checks game references, map bundle APIs, warp cleanup, native life RPCs and backpack restoration call order. A user confirmed that an existing volcano save enters the volcano again; full singleplayer restoration and multiplayer host/client testing remain pending. Automated checks do not launch Unity or Photon.
+Release compilation, saved-map and warp-lock regressions, 36 item-restore cases, 27 player-load workflow cases, 512 life-state combinations, 32 combined life/warp scenarios and save serialization checks pass against installed PEAK 3.0 assemblies. Luggage checks cover simulated host/client state transitions, delayed openings, repeated loads, reopening, same-path identity ambiguity, message ordering, host/scene changes and old/new save fields. Compatibility verification checks native game references, luggage/list/history APIs, the join hook, animator restoration and compiled coordinator integration. These checks do not launch Unity or Photon; real animation and multiplayer acceptance remain pending.
 
 ## Links
 
