@@ -4,7 +4,7 @@ schemaVersion = "0.0.1"
 [package]
 namespace = "LeonYew"
 name = "The_All_You_Need_Save_Manager_Continued"
-versionNumber = "1.2.2"
+versionNumber = "1.2.3"
 description = "Continued PEAK save manager with synchronized luggage, player revival, owner-confirmed teleport and inventory restoration. Every player in the room needs the same version. Keeps existing saves and settings."
 websiteUrl = "https://github.com/LeonYew-Ley/PeakSaveManagerContinued"
 containsNsfwContent = false

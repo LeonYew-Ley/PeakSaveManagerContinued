@@ -15,6 +15,7 @@ namespace PEAKSaveManager;
 public sealed partial class SaveManagerPlugin
 {
     private readonly HashSet<Luggage> restoredLuggage = new HashSet<Luggage>();
+    private readonly HashSet<string> worldRestoreWarnings = new HashSet<string>();
     private readonly LuggageRevisions receivedLuggageRevisions = new LuggageRevisions();
     private long luggageRevision;
     private static readonly FieldInfo SpawnHistoryField = AccessTools.Field(typeof(Peak.SpawnedItemTracker), "_historyFromSave");
@@ -187,18 +188,27 @@ public sealed partial class SaveManagerPlugin
         {
             if (batch.scene != SceneManager.GetActiveScene().name || (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient))
                 throw new InvalidOperationException("The host or scene changed during luggage matching.");
-            List<Luggage> remaining = UnityObject.FindObjectsByType<Luggage>(FindObjectsSortMode.None).Where(x => x != null).ToList();
-            List<LuggageRestoreState> identities = remaining.Select(CaptureLiveLuggage).ToList();
+            List<Luggage> available = UnityObject.FindObjectsByType<Luggage>(FindObjectsSortMode.None).Where(x => x != null).ToList();
+            List<LuggageRestoreState> identities = available.Select(CaptureLiveLuggage).ToList();
+            int[] matches = LuggageRestoration.FindMatches(snapshots, identities, PhotonNetwork.InRoom);
+            if (matches.Any(index => index < 0) && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+                continue;
+            }
             targets.Clear();
             batch.states.Clear();
-            string unmatched = null;
-            foreach (LuggageRestoreState snapshot in snapshots)
+            for (int i = 0; i < snapshots.Count; i++)
             {
-                int index = LuggageRestoration.FindMatch(snapshot, identities);
-                if (index < 0 || (PhotonNetwork.InRoom && identities[index].viewId <= 0))
+                LuggageRestoreState snapshot = snapshots[i];
+                int index = matches[i];
+                if (index < 0)
                 {
-                    unmatched = snapshot.name ?? "unnamed";
-                    break;
+                    string warning = $"Skipped saved luggage '{snapshot.name ?? "unnamed"}' at "
+                        + $"({snapshot.position?.x}, {snapshot.position?.y}, {snapshot.position?.z}): "
+                        + "no unique nearby network object. The map may have changed; player restoration will continue.";
+                    if (worldRestoreWarnings.Add(warning)) Logger.LogWarning(warning);
+                    continue;
                 }
                 // Resolve old saves once on the host. Peers use the exact live view.
                 LuggageRestoreState state = identities[index];
@@ -206,16 +216,14 @@ public sealed partial class SaveManagerPlugin
                 state.activated = snapshot.activated;
                 state.spent = snapshot.spent;
                 state.revivedPlayers = snapshot.revivedPlayers;
-                targets.Add(remaining[index]);
+                targets.Add(available[index]);
                 batch.states.Add(state);
-                remaining.RemoveAt(index);
-                identities.RemoveAt(index);
             }
-            if (unmatched == null) break;
-            if (Time.realtimeSinceStartup >= deadline)
-                throw new InvalidOperationException($"Saved luggage '{unmatched}' has no unique nearby network object. The map may have changed.");
-            yield return null;
+            break;
         }
+        // Old saves can describe props that no longer exist in the shipped map.
+        // Skipping those props must not strand players at JumpToSegment's spawn.
+        if (targets.Count == 0) yield break;
         restoredLuggage.RemoveWhere(x => x == null);
         for (int i = 0; i < targets.Count; i++) ApplyRestoredLuggage(targets[i], batch.states[i]);
         IEnumerator sync = SyncLuggageClientsRoutine("luggage", JsonConvert.SerializeObject(batch));

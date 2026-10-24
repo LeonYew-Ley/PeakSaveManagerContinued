@@ -6,14 +6,14 @@ All-in-one save manager for PEAK. Save a run, load it later, and restore the run
 
 An independent community continuation of **llucasandersen's The All You Need Save Manager**, maintained by **LeonYew / LeonYew-Ley**. Original source and attribution are retained in [NOTICE.md](NOTICE.md).
 
-## Continued 1.2.2
+## Continued 1.2.3
 
 - Fix luggage that looks closed but cannot be opened after loading. Restore appearance, interaction state and attached objects together on every client.
 - Restore closed boxes in multiplayer, cancel delayed openings and clear stale loot history. Restoring an open box never creates more loot.
-- Match same-path boxes by type, name and nearby position. Missing or ambiguous boxes report a load failure instead of changing another box.
+- Match same-path boxes by type, name and nearby position. Missing or ambiguous boxes are skipped with a partial-load warning so player position and inventory restoration can continue.
 - Confirm restoration on all current clients and send fresh live state to late joiners. Keep the saved-map, player, inventory and format 6 compatibility fixes.
 
-**Every player in the room must install 1.2.2 and restart PEAK.** Automated managed and game API checks pass; actual Unity/Photon multiplayer testing remains pending.
+**Every player in the room must install 1.2.3 and restart PEAK.** Automated managed and game API checks pass; actual Unity/Photon multiplayer testing remains pending.
 
 ## What It Syncs
 
@@ -81,7 +81,7 @@ If the config file does not exist yet, launch the game once with the mod install
 - New saves also record the live biome. Loading checks this value, or the unambiguous volcano code in legacy volcano saves, before restoring players/world objects. A game update may change a same-named map; old geometry cannot be reconstructed from player snapshots.
 
 - You can load from Airport.
-- You can load while already in a run. Luggage is matched within 20 game units using type, prefab name and position; a missing or ambiguous match stops loading with an error. A game update can change the saved map geometry.
+- You can load while already in a run. Luggage is matched within 20 game units using type, prefab name and position. Missing or ambiguous boxes are skipped after waiting for objects to become ready; player restoration continues and the result explicitly reports a partial load. A game update can change the saved map geometry.
 - In multiplayer, the host controls save and load.
 - Multiplayer loads now restore every saved player that matches, even if the full saved party is not present yet.
 - Every player in the room must install the same build, including unmatched scouts. Loading checks client support before restoring world objects and waits for luggage acknowledgements; timeouts and disconnects report a failure.

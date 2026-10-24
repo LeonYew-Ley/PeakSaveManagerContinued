@@ -31,7 +31,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.lucasandersen.peakallyouneedsavemanager";
     public const string PluginName = "The All You Need Save Manager Continued";
-    public const string PluginVersion = "1.2.2";
+    public const string PluginVersion = "1.2.3";
 
     private const string SaveFilePattern = "*.json";
 
@@ -3007,6 +3007,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         }
 
         isLoading = true;
+        worldRestoreWarnings.Clear();
         SetStatus("Loading save...", Color.cyan, 10f);
         try
         {
@@ -3200,10 +3201,12 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         }
 
         RestoreRunMetadata(envelope.metadata);
-        if (appliedCount < envelope.players.Count)
+        if (appliedCount < envelope.players.Count || worldRestoreWarnings.Count > 0)
         {
-            Logger.LogWarning($"Load partially restored '{fullPath}' ({appliedCount}/{envelope.players.Count} players); see skipped-player reasons above.");
-            SetStatus($"Partial load: restored {appliedCount}/{envelope.players.Count} saved players. See log for skipped players.", Color.yellow, 7f);
+            string worldSummary = worldRestoreWarnings.Count > 0
+                ? $" Skipped {worldRestoreWarnings.Count} unmatched luggage states." : "";
+            Logger.LogWarning($"Load partially restored '{fullPath}' ({appliedCount}/{envelope.players.Count} players).{worldSummary} See skipped-state reasons above.");
+            SetStatus($"Partial load: restored {appliedCount}/{envelope.players.Count} saved players.{worldSummary} See log.", Color.yellow, 9f);
         }
         else
         {

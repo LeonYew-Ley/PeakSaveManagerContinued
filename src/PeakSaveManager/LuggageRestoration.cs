@@ -78,6 +78,24 @@ internal static class LuggageRestoration
         return ambiguous ? -1 : best;
     }
 
+    internal static int[] FindMatches(IList<LuggageRestoreState> saved, IList<LuggageRestoreState> candidates, bool requireNetworkView)
+    {
+        List<LuggageRestoreState> remaining = new List<LuggageRestoreState>(candidates);
+        List<int> indices = new List<int>();
+        for (int i = 0; i < candidates.Count; i++) indices.Add(i);
+        int[] matches = new int[saved.Count];
+        for (int i = 0; i < saved.Count; i++)
+        {
+            int index = FindMatch(saved[i], remaining);
+            matches[i] = -1;
+            if (index < 0 || (requireNetworkView && remaining[index].viewId <= 0)) continue;
+            matches[i] = indices[index];
+            remaining.RemoveAt(index);
+            indices.RemoveAt(index);
+        }
+        return matches;
+    }
+
     internal static bool IsFinite(Vector3Snapshot position) => position != null
         && !float.IsNaN(position.x) && !float.IsInfinity(position.x)
         && !float.IsNaN(position.y) && !float.IsInfinity(position.y)

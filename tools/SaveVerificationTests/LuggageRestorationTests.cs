@@ -54,6 +54,23 @@ internal static class LuggageRestorationTests
         saved.type = null; boxes[0] = Identity(10);
         Assert(LuggageRestoration.FindMatch(saved, boxes) == 0, "Legacy snapshots without a type still match by name and position.");
 
+        // A historical map can lose its first saved box while later boxes still
+        // exist. That is a partial world restore, not a failed player load.
+        boxes = new() { Identity(10), Identity(60) };
+        int[] matches = LuggageRestoration.FindMatches(new[] { Identity(1000), Identity(10), Identity(60) }, boxes, true);
+        Assert(matches.SequenceEqual(new[] { -1, 0, 1 }), "A missing first box must not discard later valid matches.");
+        matches = LuggageRestoration.FindMatches(new[] { Identity(1000), Identity(2000) }, boxes, true);
+        Assert(matches.All(index => index == -1), "A changed map with no matching boxes must finish with skips, allowing player restoration.");
+        matches = LuggageRestoration.FindMatches(new[] { Identity(10), Identity(10) }, new[] { Identity(10) }, true);
+        Assert(matches.SequenceEqual(new[] { 0, -1 }), "A live box cannot consume two saved states.");
+        matches = LuggageRestoration.FindMatches(new[] { Identity(10), Identity(60) }, new[] { Identity(10), Identity(10), Identity(60) }, true);
+        Assert(matches.SequenceEqual(new[] { -1, 2 }), "An ambiguous box must stay untouched without blocking other boxes.");
+        boxes[0].viewId = 0;
+        matches = LuggageRestoration.FindMatches(new[] { Identity(10), Identity(60) }, boxes, true);
+        Assert(matches.SequenceEqual(new[] { -1, 1 }), "A missing network view is skipped without blocking later network objects.");
+        Assert(LuggageRestoration.FindMatches(new[] { Identity(10) }, boxes, false)[0] == 0, "Offline matching does not require a Photon identity.");
+        Assert(LuggageRestoration.FindMatches(new[] { Identity(10) }, Array.Empty<LuggageRestoreState>(), true)[0] == -1, "An empty live segment is a partial world restore.");
+
         LuggageRevisions revisions = new();
         LuggageRestoreState first = Identity(10), second = Identity(30);
         second.viewId = 101;
@@ -74,7 +91,7 @@ internal static class LuggageRestorationTests
         Assert(roundTrip.activatedObjectActive == false, "A deliberately inactive attached object must survive serialization.");
         LuggageSnapshot legacy = JsonConvert.DeserializeObject<LuggageSnapshot>(JsonConvert.SerializeObject(new LuggageSnapshot { activatedObjectActive = true }));
         Assert(legacy.activatedObjectActive == true, "Legacy and modern capture fields both retain attached-object state.");
-        Console.WriteLine($"Luggage verification passed: {transitions} host/client transitions with three repeated passes, delayed opening, reopening, identity ambiguity, message ordering and save compatibility.");
+        Console.WriteLine($"Luggage verification passed: {transitions} host/client transitions with three repeated passes, delayed opening, reopening, missing/ambiguous/networkless partial batches, message ordering and save compatibility.");
     }
 
     private static LuggageRestoreState Identity(float x) => new()

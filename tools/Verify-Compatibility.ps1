@@ -64,6 +64,15 @@ try {
     if (!($luggageApply.Body.Instructions | Where-Object { $_.Operand -and $_.Operand.ToString() -like '*LuggageRestoration::Apply(*' })) {
         throw 'Live luggage restoration must use the behavior-tested coordinator.'
     }
+    $luggageRoutine = ($pluginType.NestedTypes | Where-Object Name -like '<RestoreLuggageRoutine>*').Methods | Where-Object Name -eq 'MoveNext'
+    if (!($luggageRoutine.Body.Instructions | Where-Object { $_.Operand -and $_.Operand.ToString() -like '*LuggageRestoration::FindMatches(*' })) {
+        throw 'Live luggage matching must use the tested partial-batch resolver.'
+    }
+    $loadRoutine = ($pluginType.NestedTypes | Where-Object Name -like '<LoadSaveRoutineCore>*').Methods | Where-Object Name -eq 'MoveNext'
+    if (!($luggageRoutine.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.FieldReference] -and $_.Operand.Name -eq 'worldRestoreWarnings' }) -or
+        !($loadRoutine.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.FieldReference] -and $_.Operand.Name -eq 'worldRestoreWarnings' })) {
+        throw 'Skipped luggage must reach the final partial-load result.'
+    }
     $protocol = $pluginType.Fields | Where-Object Name -eq 'PlayerLoadProtocol'
     if ($protocol.Constant -ne 4) { throw 'Luggage restoration requires the updated client protocol.' }
     $luggageTarget = $pluginType.NestedTypes | Where-Object Name -eq 'UnityLuggageRestoreTarget'

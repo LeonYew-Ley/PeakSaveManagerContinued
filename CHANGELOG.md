@@ -1,3 +1,11 @@
+## 1.2.3 — Continue player restoration when historical luggage is missing
+
+- Fix the 1.2.2 regression where a missing or ambiguous saved luggage object aborted loading after switching segments, leaving scouts at the segment entrance before their saved positions and inventories were restored.
+- Wait for luggage objects to become ready, then skip unmatched objects and continue restoring every safe match and the saved players. Keep the type, name, distance and ambiguity checks; do not guess a distant replacement.
+- Report skipped luggage in the log and show a yellow partial-load result instead of claiming complete world restoration. Clear and deduplicate warnings for each load.
+- Retain synchronized luggage state, late-join handling, player-owner confirmation and format 6 compatibility. Every room participant should update to 1.2.3 and restart PEAK.
+- Add regressions for missing first/all boxes, ambiguous matches, unavailable network views, offline matching and duplicate saved identities. Managed/IL checks do not replace in-game testing.
+
 ## 1.2.2 — Luggage restoration and multiplayer synchronization
 
 - Restore luggage appearance, interaction state and the native available-luggage list together on the host and all current clients. Fix closed-looking boxes that could not be opened after loading.

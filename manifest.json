@@ -1,6 +1,6 @@
 {
   "name": "The_All_You_Need_Save_Manager_Continued",
-  "version_number": "1.2.2",
+  "version_number": "1.2.3",
   "website_url": "https://github.com/LeonYew-Ley/PeakSaveManagerContinued",
   "description": "Continued PEAK save manager with synchronized luggage, player revival, owner-confirmed teleport and inventory restoration. Every player in the room needs the same version. Keeps existing saves and settings.",
   "dependencies": [
