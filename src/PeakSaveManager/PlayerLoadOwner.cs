@@ -17,9 +17,9 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
     // Uncached, targeted, reliable messages. The GUID and protocol version keep
     // unrelated mods using the same application event code out of this handler.
     private const byte PlayerLoadEventCode = 173;
-    // The merged build also finalizes life state after warp. Older physics-only
-    // clients must not acknowledge a restore that omits that required step.
-    private const int PlayerLoadProtocol = 2;
+    // This build supports PEAK 3.0's status lock as well as post-warp life
+    // restoration. Older clients must not acknowledge an unsupported restore.
+    private const int PlayerLoadProtocol = 3;
     private const int PlayerLoadRequestLifetimeMs = 30000;
     private readonly Dictionary<string, OwnerLoadReply> ownerLoadReplies = new Dictionary<string, OwnerLoadReply>();
     private readonly HashSet<int> ownerLoadsInProgress = new HashSet<int>();
@@ -179,7 +179,7 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
     private sealed class UnityPlayerLoadTarget : IPlayerLoadTarget
     {
         private static readonly FieldInfo WarpRoutineField = AccessTools.Field(typeof(Character), "_warpRoutine");
-        private static readonly FieldInfo WarpStatusLockField = AccessTools.Field(typeof(Character), "_warpStatusLock");
+        private static readonly WarpStatusLock StatusLock = new WarpStatusLock(typeof(Character));
         private static readonly MethodInfo SetWarpingMethod = AccessTools.PropertySetter(typeof(Character), "warping");
         private readonly Character character;
         private readonly PlayerSnapshot snapshot;
@@ -268,7 +268,7 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
 
         public void BeginWarp()
         {
-            if (WarpRoutineField == null || WarpStatusLockField == null || SetWarpingMethod == null)
+            if (WarpRoutineField == null || !StatusLock.IsSupported || SetWarpingMethod == null)
                 throw new InvalidOperationException("The game's teleport cleanup API changed.");
             foreach (Collider collider in character.refs.ragdoll.GetComponentsInChildren<Collider>(true))
                 collisionBeforeWarp.Add(new KeyValuePair<Collider, bool>(collider, collider.enabled));
@@ -335,7 +335,7 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
             {
                 character.StopCoroutine(ownedWarp);
                 SetWarpingMethod.Invoke(character, new object[] { false });
-                WarpStatusLockField.SetValue(character, false);
+                StatusLock.Release(character);
                 foreach (KeyValuePair<Collider, bool> state in collisionBeforeWarp)
                     if (state.Key != null) state.Key.enabled = state.Value;
                 if (character.refs?.ragdoll != null) HaltMotion();

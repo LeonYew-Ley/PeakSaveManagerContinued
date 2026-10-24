@@ -56,6 +56,9 @@ public sealed class SaveMetadata
 
     public string currentSegmentName;
 
+    // Added without changing format v6; absent in legacy files.
+    public string currentBiomeName;
+
     public int ascent;
 
     public int playerCount;

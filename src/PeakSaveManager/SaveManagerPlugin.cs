@@ -31,7 +31,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.lucasandersen.peakallyouneedsavemanager";
     public const string PluginName = "The All You Need Save Manager Continued";
-    public const string PluginVersion = "1.2.0";
+    public const string PluginVersion = "1.2.1";
 
     private const string SaveFilePattern = "*.json";
 
@@ -1439,6 +1439,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 
         int currentSegment = 0;
         string segmentName = Segment.Beach.ToString();
+        string currentBiomeName = null;
         if (MapHandler.Exists)
         {
             MapHandler mapHandler = UnityObject.FindFirstObjectByType<MapHandler>();
@@ -1447,6 +1448,8 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
                 Segment segment = mapHandler.GetCurrentSegment();
                 currentSegment = (int)segment;
                 segmentName = segment.ToString();
+                if (mapHandler.segments != null && currentSegment >= 0 && currentSegment < mapHandler.segments.Length)
+                    currentBiomeName = MapHandler.GetBiomeForSegment(currentSegment).ToString();
             }
         }
 
@@ -1492,6 +1495,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
                 levelSeed = levelSeed,
                 currentSegment = currentSegment,
                 currentSegmentName = segmentName,
+                currentBiomeName = currentBiomeName,
                 ascent = Ascents.currentAscent,
                 runDay = runDay,
                 runTimeSeconds = runTimeSeconds,
@@ -3100,13 +3104,14 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         bool saveNeedsRunScene = SaveNeedsNonAirportScene(envelope.metadata);
         if (string.IsNullOrWhiteSpace(targetScene) && saveNeedsRunScene)
         {
-            if (IsInAirportScene())
-            {
-                SetStatus("Saved level is unavailable or mismatched for this version.", Color.yellow, 7f);
-                yield break;
-            }
-
-            SetStatus("Saved level mismatch. Loading into current level.", Color.yellow, 5f);
+            throw new InvalidOperationException("The save does not identify a map. Loading into the current map is disabled.");
+        }
+        if (!string.IsNullOrWhiteSpace(targetScene))
+        {
+            Logger.LogInfo($"Preparing saved map '{targetScene}' and its resource bundle.");
+            // Flatten the iterator so bundle errors reach the load error handler.
+            IEnumerator prepareMap = SavedMapRestoration.Prepare(targetScene, new SavedMapLoader());
+            while (prepareMap.MoveNext()) yield return prepareMap.Current;
         }
 
         bool needsSceneLoad = !string.IsNullOrEmpty(targetScene)
@@ -3157,10 +3162,15 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
                 Logger.LogWarning($"Continuing load with {matchedPlayers}/{desiredMatchedPlayers} currently matched players ({CountSavedPlayers(envelope.players)} saved).");
             }
 
+        if (saveNeedsRunScene && !MapHandler.Exists)
+            throw new InvalidOperationException("The saved map has no initialized map handler.");
         if (MapHandler.Exists)
         {
             Segment targetSegment = ClampSegment(envelope.metadata.currentSegment);
             MapHandler mapHandler = UnityObject.FindFirstObjectByType<MapHandler>();
+            if (mapHandler == null || mapHandler.segments == null || (int)targetSegment >= mapHandler.segments.Length)
+                throw new InvalidOperationException("The saved map segment is unavailable in this game version.");
+            SavedMapRestoration.ValidateBiome(envelope.metadata, MapHandler.GetBiomeForSegment((int)targetSegment).ToString());
             Segment currentSegment = mapHandler != null ? mapHandler.GetCurrentSegment() : Segment.Beach;
             if (targetSegment != Segment.Beach && targetSegment != currentSegment)
             {
@@ -5862,44 +5872,8 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 
     private static string ResolveTargetScene(SaveMetadata metadata)
     {
-        if (metadata == null)
-        {
-            return string.Empty;
-        }
-
-        string activeScene = SceneManager.GetActiveScene().name;
-        HashSet<string> candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        AddSceneCandidate(candidates, metadata.levelName);
-        if (metadata.levelNumber.HasValue)
-        {
-            AddSceneCandidate(candidates, $"Level_{metadata.levelNumber.Value}");
-        }
-
-        if (metadata.dailyLevelIndex.HasValue)
-        {
-            try
-            {
-                string mapBakerLevel = SingletonAsset<MapBaker>.Instance.GetLevel(metadata.dailyLevelIndex.Value + NextLevelService.debugLevelIndexOffset);
-                AddSceneCandidate(candidates, mapBakerLevel);
-            }
-            catch
-            {
-                // ignored: fallback candidates are already added.
-            }
-        }
-
-        AddSceneCandidate(candidates, metadata.sceneName);
-
-        foreach (string candidate in candidates)
-        {
-            if (CanUseSceneCandidate(candidate, activeScene))
-            {
-                return candidate;
-            }
-        }
-
-        return string.Empty;
+        return SavedMapRestoration.ResolveScene(metadata, dailyIndex =>
+            SingletonAsset<MapBaker>.Instance.GetLevel(dailyIndex + NextLevelService.debugLevelIndexOffset));
     }
 
     private static bool SaveNeedsNonAirportScene(SaveMetadata metadata)
@@ -5925,36 +5899,6 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         }
 
         return metadata.currentSegment > (int)Segment.Beach;
-    }
-
-    private static void AddSceneCandidate(HashSet<string> output, string sceneName)
-    {
-        if (string.IsNullOrWhiteSpace(sceneName))
-        {
-            return;
-        }
-
-        if (sceneName.Equals("Airport", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        output.Add(sceneName);
-    }
-
-    private static bool CanUseSceneCandidate(string sceneName, string activeScene)
-    {
-        if (string.IsNullOrWhiteSpace(sceneName))
-        {
-            return false;
-        }
-
-        if (string.Equals(sceneName, activeScene, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return Application.CanStreamedLevelBeLoaded(sceneName);
     }
 
     private static bool IsInAirportScene()

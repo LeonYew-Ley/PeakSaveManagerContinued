@@ -6,14 +6,17 @@ All-in-one save manager for PEAK. Save a run, load it later, and restore the run
 
 An independent community continuation of **llucasandersen's The All You Need Save Manager**, maintained by **LeonYew / LeonYew-Ley**. Original source and attribution are retained in [NOTICE.md](NOTICE.md).
 
-## Continued 1.2.0
+## Continued 1.2.1
+
+- Loads the saved map's resource bundle before testing availability, preventing a saved map from silently turning into another daily map.
+- Supports PEAK 3.0 teleport status locking and checks the saved biome before restoring players or world state. Missing or changed maps report an error.
 
 - Restores saved living scouts through native revival, including teammates who are currently dead. Scouts saved as dead remain dead.
 - Waits for each player's client to finish teleporting and attach the saved held item, then reports completion.
 - Clears player motion on load and restores saved life state, stamina and collision after teleporting.
 - Keeps the backpack and item-use fixes from 1.1.0, with existing saves and configuration compatible.
 
-**The host and every restored teammate must install 1.2.0 and restart PEAK.** Automated checks pass; in-game host/client testing remains pending.
+**The host and every restored teammate must install 1.2.1 and restart PEAK.** A user confirmed that an existing volcano save enters the volcano again. Full multiplayer restoration testing remains pending.
 
 ## What It Syncs
 
@@ -76,6 +79,9 @@ Autosave can be disabled in the BepInEx config file.
 If the config file does not exist yet, launch the game once with the mod installed and BepInEx will generate it.
 
 ## Loading Notes
+
+- Explicit saved scenes are loaded from their own map bundle; a missing scene never falls back to the daily map or the active run.
+- New saves also record the live biome. Loading checks this value, or the unambiguous volcano code in legacy volcano saves, before restoring players/world objects. A game update may change a same-named map; old geometry cannot be reconstructed from player snapshots.
 
 - You can load from Airport.
 - You can load while already in a run.
@@ -150,7 +156,7 @@ Older release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Validation
 
-Release compilation, 36 item-restore cases, 27 player-load workflow cases, 512 life-state combinations, 32 combined life/warp scenarios and save serialization checks pass against installed PEAK 2.6 assemblies. Life-state and combined scenarios each run twice; additional checks cover status replay and all 101 petrify percentages. Compatibility verification checks game references, private warp cleanup APIs, native life RPCs and backpack restoration call order. In-game singleplayer and host/client testing remains pending; the automated checks do not launch Unity or Photon.
+Release compilation, saved-map and warp-lock regressions, 36 item-restore cases, 27 player-load workflow cases, 512 life-state combinations, 32 combined life/warp scenarios and save serialization checks pass against installed PEAK 3.0 assemblies. Life-state and combined scenarios each run twice; additional checks cover status replay and all 101 petrify percentages. Compatibility verification checks game references, map bundle APIs, warp cleanup, native life RPCs and backpack restoration call order. A user confirmed that an existing volcano save enters the volcano again; full singleplayer restoration and multiplayer host/client testing remain pending. Automated checks do not launch Unity or Photon.
 
 ## Links
 

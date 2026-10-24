@@ -14,6 +14,8 @@
     <Compile Include="..\..\src\PeakSaveManager\SaveModels.cs" Link="SaveModels.cs" />
     <Compile Include="..\..\src\PeakSaveManager\PlayerLoadRestoration.cs" Link="PlayerLoadRestoration.cs" />
     <Compile Include="..\..\src\PeakSaveManager\PlayerRestoration.cs" Link="PlayerRestoration.cs" />
+    <Compile Include="..\..\src\PeakSaveManager\SavedMapRestoration.cs" Link="SavedMapRestoration.cs" />
+    <Compile Include="..\..\src\PeakSaveManager\WarpStatusLock.cs" Link="WarpStatusLock.cs" />
   </ItemGroup>
 
   <ItemGroup>

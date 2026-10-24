@@ -1,3 +1,13 @@
+## 1.2.1 — Saved maps and PEAK 3.0 compatibility
+
+- Preload the resource bundle for the saved scene before checking scene availability. Explicit saved map names/numbers never fall back to a remapped daily index or the current scene.
+- Report missing, failed or timed-out map resources instead of silently choosing another map.
+- Capture the live saved biome and check it before restoring players/world state; legacy volcano codes also reject a volcano-to-temple mismatch. Same-named maps can still change between game versions.
+- Support the PEAK 3.0 teleport status-lock property while retaining the previous private field fallback.
+- Require the updated player-owner protocol so old clients cannot acknowledge this build's restoration requests.
+- Add map-loading and native-lock regressions. Managed/IL verification does not replace in-game host/client testing.
+- User confirmed that loading an existing volcano save enters the volcano again. Full multiplayer restoration remains unverified.
+
 ## 1.2.0 — Player load restoration
 
 - Restore held items once through the character owner's native equip flow, including empty hands and legacy slot fallbacks, without assigning item templates to runtime state.

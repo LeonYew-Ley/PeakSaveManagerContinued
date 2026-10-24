@@ -1,6 +1,6 @@
 {
   "name": "The_All_You_Need_Save_Manager_Continued",
-  "version_number": "1.2.0",
+  "version_number": "1.2.1",
   "website_url": "https://github.com/LeonYew-Ley/PeakSaveManagerContinued",
   "description": "Continued PEAK save manager with player revival, owner-confirmed teleport and held-item restoration. Host and teammates need the same version. Preserves existing saves and settings.",
   "dependencies": [

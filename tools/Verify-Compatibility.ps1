@@ -41,13 +41,25 @@ try {
     # String-based reflection does not appear in the normal member-reference scan.
     $character = $game.MainModule.GetType('Character')
     foreach ($contract in @(
-        @{ Name = '_warpRoutine'; Type = 'UnityEngine.Coroutine' },
-        @{ Name = '_warpStatusLock'; Type = 'System.Boolean' }
+        @{ Name = '_warpRoutine'; Type = 'UnityEngine.Coroutine' }
     )) {
         $field = @($character.Fields | Where-Object Name -eq $contract.Name)
         if ($field.Count -ne 1 -or $field[0].FieldType.FullName -ne $contract.Type) {
             throw "Player warp cleanup contract changed: $($contract.Name)"
         }
+    }
+    $statusProperty = @($character.Properties | Where-Object { $_.Name -eq 'statusesLocked' -and $_.PropertyType.FullName -eq 'System.Boolean' -and $_.SetMethod })
+    $legacyLock = @($character.Fields | Where-Object { $_.Name -eq '_warpStatusLock' -and $_.FieldType.FullName -eq 'System.Boolean' })
+    if ($statusProperty.Count -ne 1 -and $legacyLock.Count -ne 1) {
+        throw 'Player warp status-lock contract changed.'
+    }
+    $mapService = $game.MainModule.GetType('MapBundleService')
+    if (!($mapService.Methods | Where-Object { $_.Name -eq 'LoadBundlesNearestIndex' -and ($_.Parameters.ParameterType.FullName -join ',') -eq 'System.Int32,System.Boolean' })) {
+        throw 'Saved map bundle loading contract changed.'
+    }
+    $mapData = $mapService.NestedTypes | Where-Object Name -eq 'MapBundleData'
+    if (!($mapData.Properties | Where-Object { $_.Name -eq 'Loading' -and $_.PropertyType.FullName -eq 'System.Boolean' -and $_.GetMethod })) {
+        throw 'Saved map bundle loading status changed.'
     }
     $warping = @($character.Properties | Where-Object Name -eq 'warping')
     if ($warping.Count -ne 1 -or !$warping[0].SetMethod -or $warping[0].PropertyType.FullName -ne 'System.Boolean') {
