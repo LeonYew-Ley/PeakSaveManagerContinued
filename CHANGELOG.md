@@ -1,3 +1,12 @@
+## 1.2.5 - Shared map preparation
+
+- Fix old-map multiplayer loads where the host prepared its resource bundle but Photon asked teammates to switch before that bundle was loaded on their machines.
+- Check client support, preload the exact saved map on all current participants, and acknowledge the saved seed/ascent before starting the native networked scene load. Require destination-scene and initialized-character readiness from every participant before restoring world/player state.
+- Abort on preparation errors, missing acknowledgements, timeouts, party membership changes or host migration. Cancel pending preparation, restore uncommitted ascent changes and clear seed overrides; isolate replies and native-process failures between attempts.
+- Guard nested native scene processes against cancellation before their LoadLevel call. Remove local-only scene fallback in online rooms. An already-started native switch cannot be rolled back automatically.
+- Use protocol 6 and version 1.2.5 on every peer. Keep existing format 6 saves and configuration. Fix the startup log to identify the actual continued version.
+- Add behavior regressions for all-peer barriers, stale/duplicate replies, phase/retry isolation, errors, party changes, solo rooms and native-process cancellation/disposal; verify compiled gate ordering and game APIs. The user confirmed two-player Unity/Photon acceptance passed on the tested build and authorized release. Managed failure-path tests do not establish that every failure scenario was exercised in game.
+
 ## 1.2.4 — Stable landings for unsupported saved positions
 
 - Keep safe grounded save positions; when current geometry no longer supports them, search for static, walkable ground within 8m horizontally, 8m vertically and 10m total. Check nine support points and body clearance, excluding steep slopes, conditional/bounce/damaging surfaces and trigger volumes. Fail explicitly if no safe nearby landing exists.

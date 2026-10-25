@@ -17,8 +17,8 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
     // Uncached, targeted, reliable messages. The GUID and protocol version keep
     // unrelated mods using the same application event code out of this handler.
     private const byte PlayerLoadEventCode = 173;
-    // All owners must verify that grounded saves actually settle after warp.
-    private const int PlayerLoadProtocol = 5;
+    // Every peer must prepare the saved map before Photon switches scenes.
+    private const int PlayerLoadProtocol = 6;
     private const int PlayerLoadRequestLifetimeMs = 30000;
     private readonly Dictionary<string, OwnerLoadReply> ownerLoadReplies = new Dictionary<string, OwnerLoadReply>();
     private readonly HashSet<int> ownerLoadsInProgress = new HashSet<int>();
@@ -98,6 +98,13 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
             || !(message[2] is string kind) || !(message[3] is string requestId)
             || !(message[4] is int viewId) || !(message[5] is int expiresAt) || !(message[6] is string payload)) return;
 
+        if (kind == "scene-reply")
+        {
+            if (viewId == 0 && unchecked(expiresAt - PhotonNetwork.ServerTimestamp) > 0)
+                sceneLoadBarrier?.Acknowledge(photonEvent.Sender, requestId, payload);
+            return;
+        }
+
         if (kind == "reply")
         {
             if (ownerLoadReplies.TryGetValue(requestId, out OwnerLoadReply reply)
@@ -110,9 +117,20 @@ public sealed partial class SaveManagerPlugin : IOnEventCallback
         }
 
         // World and player changes may only be requested by the current host.
-        if ((kind != "probe" && kind != "restore" && kind != "world-probe" && kind != "luggage") || PhotonNetwork.MasterClient == null
+        bool sceneRequest = kind == "scene-check" || kind == "scene-prepare" || kind == "scene-arm"
+            || kind == "scene-ready" || kind == "scene-cancel" || kind == "scene-finish";
+        // A release can wait behind a slow native scene load. Its session ID
+        // still prevents it from releasing a later attempt when finally received.
+        bool sceneRelease = kind == "scene-cancel" || kind == "scene-finish";
+        if ((!sceneRequest && kind != "probe" && kind != "restore" && kind != "world-probe" && kind != "luggage") || PhotonNetwork.MasterClient == null
             || photonEvent.Sender != PhotonNetwork.MasterClient.ActorNumber
-            || unchecked(expiresAt - PhotonNetwork.ServerTimestamp) <= 0) return;
+            || (!sceneRelease && unchecked(expiresAt - PhotonNetwork.ServerTimestamp) <= 0)) return;
+
+        if (sceneRequest)
+        {
+            if (viewId == 0) HandleSharedSceneRequest(kind, payload, photonEvent.Sender, requestId, expiresAt);
+            return;
+        }
 
         if (kind == "world-probe" || kind == "luggage")
         {

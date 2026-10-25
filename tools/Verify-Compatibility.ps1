@@ -84,7 +84,27 @@ try {
         throw 'Skipped luggage must reach the final partial-load result.'
     }
     $protocol = $pluginType.Fields | Where-Object Name -eq 'PlayerLoadProtocol'
-    if ($protocol.Constant -ne 5) { throw 'Stable landing restoration requires the updated client protocol.' }
+    if ($protocol.Constant -ne 6) { throw 'Shared map preparation requires the updated client protocol.' }
+    $sharedCalls = @{}
+    foreach ($name in @('PrepareSharedMapRoutine', 'LoadSceneRoutine', 'WaitForSharedSceneReadyRoutine', 'RestoreWorldInteractablesRoutine')) {
+        $call = @($loadRoutine.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq $name })
+        if ($call.Count -ne 1) { throw "The live load must use the shared-scene gate: $name" }
+        $sharedCalls[$name] = $call[0].Offset
+    }
+    if ($sharedCalls.PrepareSharedMapRoutine -ge $sharedCalls.LoadSceneRoutine -or
+        $sharedCalls.LoadSceneRoutine -ge $sharedCalls.WaitForSharedSceneReadyRoutine -or
+        $sharedCalls.WaitForSharedSceneReadyRoutine -ge $sharedCalls.RestoreWorldInteractablesRoutine) {
+        throw 'Party preparation and scene readiness must precede world/player restoration.'
+    }
+    $sceneRoutine = ($pluginType.NestedTypes | Where-Object Name -like '<LoadSceneRoutine>*').Methods | Where-Object Name -eq 'MoveNext'
+    if (!($sceneRoutine.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq 'GuardSharedSceneProcess' })) {
+        throw 'The native scene process must retain the shared-party cancellation guard.'
+    }
+    $guard = $pluginType.Methods | Where-Object Name -eq 'GuardSharedSceneProcess'
+    if (!($guard.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.DeclaringType.Name -eq 'SceneLoadBarrier' -and $_.Operand.Name -eq 'GuardProcess' })) {
+        throw 'The live native scene guard must use the behavior-tested nested-iterator coordinator.'
+    }
+    Write-Output 'Shared map preflight/readiness ordering, protocol 6 and native cancellation guard integration passed.'
     $luggageTarget = $pluginType.NestedTypes | Where-Object Name -eq 'UnityLuggageRestoreTarget'
     $cancel = $luggageTarget.Methods | Where-Object Name -eq 'CancelOpening'
     if (!($cancel.Body.Instructions | Where-Object { $_.Operand -and $_.Operand.ToString() -like '*StopAllCoroutines*' })) {

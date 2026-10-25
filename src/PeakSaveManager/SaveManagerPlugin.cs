@@ -31,7 +31,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.lucasandersen.peakallyouneedsavemanager";
     public const string PluginName = "The All You Need Save Manager Continued";
-    public const string PluginVersion = "1.2.4";
+    public const string PluginVersion = "1.2.5";
 
     private const string SaveFilePattern = "*.json";
 
@@ -242,11 +242,12 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 
         RefreshSaveFileList();
         SetStatus("Save manager ready.", Color.cyan, 2f);
-        Logger.LogInfo("Loaded The All You Need Save Manager 1.0.0 by Lucas Andersen");
+        Logger.LogInfo($"Loaded {PluginName} {PluginVersion}; original mod by Lucas Andersen.");
     }
 
     private void OnDestroy()
     {
+        EndSharedScenePreparation(false);
         PhotonNetwork.RemoveCallbackTarget(this);
         try
         {
@@ -262,13 +263,14 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
 
     private void Update()
     {
+        UpdateSharedScenePreparation();
         if (showUi)
         {
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
         }
 
-        if (!showUi && !isLoading && autoSaveEnabled.Value)
+        if (!showUi && !isLoading && sharedScenePreparation == null && autoSaveEnabled.Value)
         {
             if (Time.time - lastAutoSaveTime > Mathf.Max(15f, autoSaveIntervalSeconds.Value))
             {
@@ -3007,6 +3009,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         }
 
         isLoading = true;
+        bool completed = false;
         worldRestoreWarnings.Clear();
         landingRestoreWarnings.Clear();
         SetStatus("Loading save...", Color.cyan, 10f);
@@ -3020,8 +3023,10 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
                     object current;
                     try
                     {
+                        ValidateSharedLoad();
                         if (!inner.MoveNext())
                         {
+                            completed = true;
                             break;
                         }
 
@@ -3040,6 +3045,7 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         }
         finally
         {
+            EndSharedScenePreparation(completed);
             ClearPendingSeedForLoad();
             isLoading = false;
             RefreshSaveFileList();
@@ -3073,34 +3079,40 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         {
             throw new InvalidOperationException("The save does not identify a map. Loading into the current map is disabled.");
         }
-        if (!string.IsNullOrWhiteSpace(targetScene))
+        bool sharedLoad = PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode;
+        if (sharedLoad)
+        {
+            IEnumerator prepareParty = PrepareSharedMapRoutine(targetScene ?? SceneManager.GetActiveScene().name, envelope.metadata);
+            using (prepareParty as IDisposable) { while (prepareParty.MoveNext()) yield return prepareParty.Current; }
+        }
+        else if (!string.IsNullOrWhiteSpace(targetScene))
         {
             Logger.LogInfo($"Preparing saved map '{targetScene}' and its resource bundle.");
             // Flatten the iterator so bundle errors reach the load error handler.
             IEnumerator prepareMap = SavedMapRestoration.Prepare(targetScene, new SavedMapLoader());
-            while (prepareMap.MoveNext()) yield return prepareMap.Current;
+            using (prepareMap as IDisposable) { while (prepareMap.MoveNext()) yield return prepareMap.Current; }
         }
 
         bool needsSceneLoad = !string.IsNullOrEmpty(targetScene)
             && !string.Equals(SceneManager.GetActiveScene().name, targetScene, StringComparison.OrdinalIgnoreCase);
 
-        if (envelope.metadata.levelSeed != 0)
+        if (!sharedLoad && envelope.metadata.levelSeed != 0)
         {
             SetPendingSeedForLoad(envelope.metadata.levelSeed);
             Logger.LogInfo($"Queued seed {PendingSeedForLoad.Value} for next level generation");
         }
-        else
+        else if (!sharedLoad)
         {
             ClearPendingSeedForLoad();
         }
 
         if (needsSceneLoad)
         {
-            yield return StartCoroutine(LoadSceneRoutine(targetScene, envelope.metadata.ascent));
+            IEnumerator loadScene = LoadSceneRoutine(targetScene, envelope.metadata.ascent);
+            using (loadScene as IDisposable) { while (loadScene.MoveNext()) yield return loadScene.Current; }
             if (!lastSceneLoadSucceeded)
             {
-                SetStatus($"Failed to load scene '{targetScene}'.", Color.red, 6f);
-                yield break;
+                throw new TimeoutException($"Failed to finish loading scene '{targetScene}'. Restoration stopped.");
             }
         }
         else
@@ -3108,26 +3120,30 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
             Ascents.currentAscent = envelope.metadata.ascent;
         }
 
-            int desiredMatchedPlayers = GetDesiredMatchedPlayerCount(envelope.players);
-            float playerWaitTimeout = desiredMatchedPlayers > 1 ? 45f : 20f;
-            yield return StartCoroutine(WaitForPlayersRoutine(envelope.players, desiredMatchedPlayers, playerWaitTimeout));
-            int matchedPlayers = CountMatchedPlayers(envelope.players);
-            if (matchedPlayers <= 0)
-            {
-                foreach (PlayerSnapshot snapshot in envelope.players)
-                {
-                    GamePlayer player = FindPlayer(snapshot, envelope.players, out string matchReason);
-                    LogSkippedPlayer(snapshot, matchReason ?? GetPlayerRestoreReadinessIssue(player));
-                }
+        if (sharedLoad)
+        {
+            IEnumerator ready = WaitForSharedSceneReadyRoutine();
+            using (ready as IDisposable) { while (ready.MoveNext()) yield return ready.Current; }
+        }
 
-                SetStatus("No ready, uniquely matched players were found. See log for details.", Color.yellow, 7f);
-                yield break;
+        int desiredMatchedPlayers = GetDesiredMatchedPlayerCount(envelope.players);
+        float playerWaitTimeout = desiredMatchedPlayers > 1 ? 45f : 20f;
+        IEnumerator waitPlayers = WaitForPlayersRoutine(envelope.players, desiredMatchedPlayers, playerWaitTimeout);
+        using (waitPlayers as IDisposable) { while (waitPlayers.MoveNext()) yield return waitPlayers.Current; }
+        int matchedPlayers = CountMatchedPlayers(envelope.players);
+        if (matchedPlayers <= 0)
+        {
+            foreach (PlayerSnapshot snapshot in envelope.players)
+            {
+                GamePlayer player = FindPlayer(snapshot, envelope.players, out string matchReason);
+                LogSkippedPlayer(snapshot, matchReason ?? GetPlayerRestoreReadinessIssue(player));
             }
 
-            if (matchedPlayers < desiredMatchedPlayers)
-            {
-                Logger.LogWarning($"Continuing load with {matchedPlayers}/{desiredMatchedPlayers} currently matched players ({CountSavedPlayers(envelope.players)} saved).");
-            }
+            throw new InvalidOperationException("No ready, uniquely matched saved players were found. Restoration stopped.");
+        }
+
+        if (matchedPlayers < desiredMatchedPlayers)
+            throw new InvalidOperationException($"Only {matchedPlayers}/{desiredMatchedPlayers} saved players are ready. Restoration stopped.");
 
         if (saveNeedsRunScene && !MapHandler.Exists)
             throw new InvalidOperationException("The saved map has no initialized map handler.");
@@ -3220,10 +3236,15 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
     private IEnumerator LoadSceneRoutine(string sceneName, int ascent)
     {
         lastSceneLoadSucceeded = false;
+        SharedScenePreparation scenePreparation = sharedScenePreparation;
+        ValidateSharedLoad();
+        if (LoadingScreenHandler.loading)
+            throw new InvalidOperationException("Another scene load is already running.");
         Ascents.currentAscent = ascent;
         try
         {
             GameHandler.AddStatus<SceneSwitchingStatus>(new SceneSwitchingStatus());
+            if (scenePreparation != null) scenePreparation.AddedSceneSwitchingStatus = true;
         }
         catch (Exception ex)
         {
@@ -3236,21 +3257,27 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
             LoadingScreenHandler handler = RetrievableResourceSingleton<LoadingScreenHandler>.Instance;
             if (handler != null)
             {
+                IEnumerator process = handler.LoadSceneProcess(sceneName, networked: true, yieldForCharacterSpawn: true, extraYieldTimeOnEnd: 0.5f);
+                if (sharedScenePreparation != null) process = GuardSharedSceneProcess(process, sharedScenePreparation);
                 handler.Load(
                     LoadingScreen.LoadingScreenType.Plane,
                     null,
-                    handler.LoadSceneProcess(sceneName, networked: true, yieldForCharacterSpawn: true, extraYieldTimeOnEnd: 0.5f)
+                    process
                 );
                 usedLoadingScreen = true;
             }
         }
         catch (Exception ex)
         {
+            if (PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode)
+                throw new InvalidOperationException("Could not start the shared scene load. Local-only fallback is disabled in a room.", ex);
             Logger.LogWarning($"LoadingScreenHandler load failed, using fallback load: {ex.Message}");
         }
 
         if (!usedLoadingScreen)
         {
+            if (PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode)
+                throw new InvalidOperationException("The shared loading screen is unavailable. Local-only fallback is disabled in a room.");
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName);
             if (operation == null)
             {
@@ -3269,6 +3296,8 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
         float timeout = 45f;
         while (timeout > 0f)
         {
+            if (scenePreparation?.LoadError != null)
+                throw new InvalidOperationException("The shared scene process failed. Restoration stopped.", scenePreparation.LoadError);
             string activeScene = SceneManager.GetActiveScene().name;
             bool sceneMatches = string.Equals(activeScene, sceneName, StringComparison.OrdinalIgnoreCase);
             bool doneLoading = !usedLoadingScreen || !LoadingScreenHandler.loading;
@@ -6988,7 +7017,22 @@ public sealed partial class SaveManagerPlugin : BaseUnityPlugin
             return false;
         }
 
-        if (Instance == null || !Instance.isLoading)
+        if (Instance == null || (!Instance.isLoading && Instance.sharedScenePreparation?.Armed != true))
+        {
+            ClearPendingSeedForLoad();
+            seed = 0;
+            return false;
+        }
+
+        if (Instance.sharedScenePreparation != null
+            && SceneManager.GetActiveScene().name != Instance.sharedScenePreparation.Request.scene)
+        {
+            seed = 0;
+            return false;
+        }
+
+        try { Instance.ValidateSharedLoad(); }
+        catch
         {
             ClearPendingSeedForLoad();
             seed = 0;

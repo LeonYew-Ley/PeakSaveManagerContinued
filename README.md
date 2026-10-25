@@ -6,7 +6,14 @@ All-in-one save manager for PEAK. Save a run, load it later, and restore the run
 
 An independent community continuation of **llucasandersen's The All You Need Save Manager**, maintained by **LeonYew / LeonYew-Ley**. Original source and attribution are retained in [NOTICE.md](NOTICE.md).
 
-## Continued 1.2.4
+## Continued 1.2.5
+
+- Prepare the saved map resource bundle on every peer before the host switches scenes. Fix teammates remaining in Airport when an old map bundle is not already loaded.
+- Require all peers to confirm map preparation and saved seed/ascent, then confirm the destination scene and initialized characters before restoring world/player state.
+- Stop on missing client support, preparation errors, timeouts or party changes. Keep cancellation guards inside the native loading process; never fall back to a local-only scene load in an online room.
+- Every participant needs 1.2.5 and a full game restart. The user confirmed two-player Unity/Photon acceptance passed on the tested build; managed regressions and game API checks also pass.
+
+## Retained from 1.2.4
 
 - Preserve supported saved positions; find nearby stable ground for unsafe grounded saves, with explicit displacement reporting. Search is limited to 8m horizontally / 8m vertically and 10m total, and does not rewrite saves.
 - Check support, slope and body clearance; confirm grounded players actually settle after teleport. No safe nearby ground produces an explicit load failure.
@@ -17,7 +24,7 @@ An independent community continuation of **llucasandersen's The All You Need Sav
 - Match same-path boxes by type, name and nearby position. Missing or ambiguous boxes are skipped with a partial-load warning so player position and inventory restoration can continue.
 - Confirm restoration on all current clients and send fresh live state to late joiners. Keep the saved-map, player, inventory and format 6 compatibility fixes.
 
-**Every player in the room must install 1.2.4 and restart PEAK.** Automated managed and game API checks pass; actual Unity/Photon multiplayer testing remains pending.
+**Every player in the room must install 1.2.5 and restart PEAK.** Two-player Unity/Photon acceptance was confirmed by the user.
 
 ## What It Syncs
 
@@ -81,18 +88,18 @@ If the config file does not exist yet, launch the game once with the mod install
 
 ## Loading Notes
 
-- Explicit saved scenes are loaded from their own map bundle; a missing scene never falls back to the daily map or the active run.
+- Explicit saved scenes are loaded from their own map bundle on every peer; a missing scene never falls back to the daily map or the active run. The host switches only after the original party confirms preparation.
 - New saves also record the live biome. Loading checks this value, or the unambiguous volcano code in legacy volcano saves, before restoring players/world objects. A game update may change a same-named map; old geometry cannot be reconstructed from player snapshots.
 
 - You can load from Airport.
 - You can load while already in a run. Luggage is matched within 20 game units using type, prefab name and position. Missing or ambiguous boxes are skipped after waiting for objects to become ready; player restoration continues and the result explicitly reports a partial load. A game update can change the saved map geometry.
 - In multiplayer, the host controls save and load.
-- Multiplayer loads now restore every saved player that matches, even if the full saved party is not present yet.
-- Every player in the room must install the same build, including unmatched scouts. Loading checks client support before restoring world objects and waits for luggage acknowledgements; timeouts and disconnects report a failure.
+- Saved players absent before loading can remain absent. Every player present when loading starts must prepare the map, enter the destination and initialize their character. Missing expected player matches stop restoration instead of continuing with just the host.
+- Every player in the room must install the same build, including unmatched scouts. Loading checks support before preparing resources and waits for scene, character and luggage acknowledgements. A join, departure or host change during loading aborts the attempt; retry with the new party. Once a native scene switch has started it cannot be rolled back automatically.
 - Teleport completion and native held-item attachment are checked on the character's owner before reporting success. Timeouts and disconnects report a load failure.
 - Players resume at rest at the saved position and view. Airborne or climbing saves still need physical support to stand; loading does not move players to a guessed ground position.
 - Living saved scouts use the game's network revival without extra revival penalties before inventory is restored.
-- Player names must be unique and match the save. Missing, renamed, ambiguous or uninitialized players are skipped and reported as a partial load.
+- Player names must be unique and match the save. Absent saved players are reported in the partial-load result; missing expected matches or uninitialized current party members stop restoration.
 
 ## Save Files
 

@@ -33,6 +33,7 @@ internal static class Program
             PlayerRestorationTests.Run();
             MergedPlayerLoadTests.Run();
             SavedMapRestorationTests.Run();
+            SceneLoadBarrierTests.Run();
             WarpStatusLockTests.Run();
             LuggageRestorationTests.Run();
             LandingSelectionTests.Run();
